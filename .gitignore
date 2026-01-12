@@ -78,3 +78,6 @@ nosetests.xml
 # R
 .Rproj.user
 .Rhistory
+# pixi environments
+.pixi/*
+!.pixi/config.toml
