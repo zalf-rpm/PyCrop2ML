@@ -32,43 +32,45 @@ from pycropml.transpiler.generators.recordGenerator import Crop2ML_Vpz
 import pycropml.transpiler.antlr_py
 
 NAMES = {
-    'r': 'r',
-    'cs': 'csharp',
-    'cpp': 'cpp',
+    "r": "r",
+    "cs": "csharp",
+    "cpp": "cpp",
     "cpp2": "cpp2",
-    'py': 'python',
-    'f90': 'fortran',
-    'java': 'java',
-    'simplace': 'simplace',
-    'sirius': 'sirius',
+    "py": "python",
+    "f90": "fortran",
+    "java": "java",
+    "simplace": "simplace",
+    "sirius": "sirius",
     "openalea": "openalea",
     "apsim": "apsim",
     "record": "record",
     "dssat": "dssat",
     "bioma": "bioma",
     "stics": "stics",
-    "sirius2": "sirius2"
+    "sirius2": "sirius2",
+    "check": "check",
 }
 
-ext = {'r': 'r',
-       'cs': 'cs',
-       'cpp': 'cpp',
+ext = {"r": "r",
+       "cs": "cs",
+       "cpp": "cpp",
        "cpp2": "cpp",
-       'py': 'py',
-       'f90': 'f90',
-       'java': 'java',
-       'simplace': 'java',
-       'sirius': 'cs',
-       'bioma': 'cs',
+       "py": "py",
+       "f90": "f90",
+       "java": "java",
+       "simplace": "java",
+       "sirius": "cs",
+       "bioma": "cs",
        "openalea": "py",
        "apsim": "cs",
        "record": "cpp",
        "dssat": "f90",
        "stics": "f90",
-       "sirius2": 'cs'
+       "sirius2": "cs",
+       "check": "check",
        }
 
-cymltx_languages = ['dssat', "simplace", "bioma", "openalea", "f90", "stics", "py", "apsim"]
+cymltx_languages = ["dssat", "simplace", "bioma", "openalea", "f90", "stics", "py", "apsim"]
 langs = ["cs", "cpp", "java", "f90", "r", "py"]
 
 domain_class = ["cs", "java", "sirius", "cpp", "cpp2", "bioma", "sirius2", "apsim"]
