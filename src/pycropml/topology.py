@@ -304,8 +304,8 @@ class Topology:
         display(SVG(d))
 
     def algo2cyml(self, dir_images=None):
-        if dir_images:
-            self.write_png(dir_images)
+        #if dir_images:
+        #    self.write_png(dir_images)
         code = 'from datetime import datetime\nfrom math import *\n'
         tab = ' '*4
         for mod in self.model.model:

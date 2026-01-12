@@ -111,10 +111,10 @@ class AstTransformer():
                     }
         elif isinstance(nodes, Nodes.FromImportStatNode):
             module = nodes.module.module_name.value
-            if module == "math" and nodes.module.name_list.args[0].value == "*":
+            if module == "math" and nodes.module.imported_names[0].value == "*":
                 name_list = list(FUNCTION_API["math"].keys()) +list(CONSTANT_API["math"].keys())
             else:
-                name_list = [name.value for name in nodes.module.name_list.args]
+                name_list = [name.value for name in nodes.module.imported_names]
             self._fromimport[module] = name_list
             return {"type": "importfrom",
                     "namespace": module,
@@ -537,10 +537,10 @@ class AstTransformer():
     
     
     def visit_unicodenode(self, node, location):
-        return {'type': 'unicode', 'value':  node.value, 'pseudo_type': 'str'}
-
-    def visit_stringnode(self, node, location):
         return {'type': 'str', 'value':  node.value, 'pseudo_type': 'str'}
+
+    #def visit_stringnode(self, node, location):
+    #    return {'type': 'str', 'value':  node.value, 'pseudo_type': 'str'}
 
     def visit_tuplenode(self, node, args, mult_factor, location):
         element_nodes, accidentaly_homogeneous, element_type = self.visit_elements(
@@ -1290,10 +1290,10 @@ class AstTransformer():
         for de in declarators:
             if not isinstance(de, Nodes.CArrayDeclaratorNode):
                 if not self.isattr and self.type_env[de.name]:
-                    raise PseudoCythonTypeCheckError(
-                        "%s is already declared" % de.name)
+                    raise PseudoCythonTypeCheckError(f"{de.name} is already declared")
                 decl = {"name": de.name,
-                        "type": self.visit_node(base_type)[0] if base_type.name in typet + typearray else base_type.name, "lineno": location}
+                        "type": self.visit_node(base_type)[0] if base_type.name in typet + typearray else base_type.name,
+                        "lineno": location}
                 if base_type.name in typet + typearray:
                     if not self.isattr:  self.type_env[de.name] = self.visit_node(base_type)[1]
                     decl["pseudo_type"] = self.visit_node(base_type)[1]
@@ -1359,16 +1359,18 @@ class AstTransformer():
                         base_type.name, decl["pseudo_type"][0], "can't change the type of variable %s in %s " % (de.name, self.function_name))
 
                 elif de.default:
-                    
                     value_node = self.visit_node(de.default)
                     if isinstance(de.default, ExprNodes.UnaryMinusNode):
                         decl["value"] = str(-float(value_node["value"]["value"]))
                     else:
-                        if type(de.default) in (ExprNodes.IntNode,ExprNodes.UnaryMinusNode, ExprNodes.FloatNode, ExprNodes.UnicodeNode, ExprNodes.StringNode, ExprNodes.BoolNode):
-                            decl["value"] = value_node["value"] 
-                        else: decl["value"] = value_node
+                        if type(de.default) in (ExprNodes.IntNode,ExprNodes.UnaryMinusNode, ExprNodes.FloatNode, ExprNodes.UnicodeNode, ExprNodes.BoolNode):
+                            decl["value"] = value_node["value"]
+                        else:
+                            decl["type"] = value_node["type"]
+                            decl["value"] = value_node
                     decl["pseudo_type"] = value_node["pseudo_type"]
-                    if not self.isattr: self.type_env[de.name] = decl["pseudo_type"]
+                    if not self.isattr:
+                        self.type_env[de.name] = decl["pseudo_type"]
                     self._compatible_types(
                         self.visit_node(base_type)[1], decl["pseudo_type"], "can't change the type of variable %s in %s " % (de.name, self.function_name))
             else:
@@ -1756,7 +1758,7 @@ class AstTransformer():
             'pseudo_type': 'Void'
         }
 
-    def visit_primarycmpnode(self, node, operand1, operand2, coerced_operand2, cascade, location):
+    def visit_primarycmpnode(self, node, operand1, operand2, coerced_operand2, cascade, location, special_bool_extra_args):
         if node.operator not in PSEUDO_OPS[ExprNodes.PrimaryCmpNode]:
             raise("error")
         else:

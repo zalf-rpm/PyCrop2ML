@@ -6,6 +6,9 @@ from Cython.Compiler import Main
 from Cython.Compiler import Options
 from path import Path
 import sys
+from Cython.Compiler import Errors
+if not hasattr(Errors.threadlocal, 'cython_errors_count'):
+    Errors.init_thread()
 
 options_defaults = dict(
     show_version = 0,

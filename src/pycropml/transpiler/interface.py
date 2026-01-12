@@ -46,8 +46,10 @@ class TreeInterface():
                 self.allocated_var.extend(self.alloc[tree.function])
             if tree.type =="for_sequence":
                 self.ForSequence = True
-                self.nbForSeq =self.nbForSeq+1 
-            if tree.type == "custom_call" and tree.function not in self.dependencies:
+                self.nbForSeq =self.nbForSeq+1
+            td = tree.__dir__()
+            if tree.type == "custom_call" and (("function" in td and tree.function not in self.dependencies) \
+                    or ("value" in td and "function" in tree.value.__dir__() and tree.value.function not in self.dependencies)):
                 self.dependencies.append(tree.function)
             if tree.type=="list" and "list" not in self.dependencies:
                 self.dependencies.append("list")

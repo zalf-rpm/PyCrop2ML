@@ -1204,6 +1204,10 @@ class Cpp2Generator(CodeGenerator, CppRules):
                 self.write(" = {")
                 self.comma_separated_list(n.pairs)
                 self.write("};")
+            elif "value" in dn:
+                self.write(f"{self.types[n.pseudo_type]} {n.name} = ")
+                self.visit(n.value)
+                self.write(";")
 
         self.newline(node)
 
