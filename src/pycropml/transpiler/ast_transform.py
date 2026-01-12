@@ -111,10 +111,14 @@ class AstTransformer():
                     }
         elif isinstance(nodes, Nodes.FromImportStatNode):
             module = nodes.module.module_name.value
-            if module == "math" and nodes.module.imported_names[0].value == "*":
+            if "imported_names" in nodes.module.__dir__():
+                imported_names = nodes.module.imported_names
+            else:
+                imported_names = nodes.module.name_list.args
+            if module == "math" and imported_names[0].value == "*":
                 name_list = list(FUNCTION_API["math"].keys()) +list(CONSTANT_API["math"].keys())
             else:
-                name_list = [name.value for name in nodes.module.imported_names]
+                name_list = [name.value for name in imported_names]
             self._fromimport[module] = name_list
             return {"type": "importfrom",
                     "namespace": module,
@@ -1758,7 +1762,7 @@ class AstTransformer():
             'pseudo_type': 'Void'
         }
 
-    def visit_primarycmpnode(self, node, operand1, operand2, coerced_operand2, cascade, location, special_bool_extra_args):
+    def visit_primarycmpnode(self, node, operand1, operand2, coerced_operand2, cascade, location, special_bool_extra_args=None):
         if node.operator not in PSEUDO_OPS[ExprNodes.PrimaryCmpNode]:
             raise("error")
         else:

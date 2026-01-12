@@ -6,8 +6,10 @@ from Cython.Compiler import Main
 from Cython.Compiler import Options
 from path import Path
 import sys
+
+# needed for changes in Cython 3
 from Cython.Compiler import Errors
-if not hasattr(Errors.threadlocal, 'cython_errors_count'):
+if "threadlocal" in Errors.__dir__() and not hasattr(Errors.threadlocal, 'cython_errors_count'):
     Errors.init_thread()
 
 options_defaults = dict(
