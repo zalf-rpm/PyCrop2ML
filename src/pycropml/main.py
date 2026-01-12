@@ -128,7 +128,9 @@ Example
             status = transpile_file(sourcef, language)
     elif package:
         for language in langs:
+            print(f"vvv transpiling to {language}")
             status = transpile_package(sourcef, language)
+            print(f"^^^ transpiled to {language}\n\n", flush=True)
     else:
         for language in langs:
             status = transpile_component(sourcef, newpackage, language)
