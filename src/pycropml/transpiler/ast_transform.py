@@ -536,15 +536,11 @@ class AstTransformer():
                 "pseudo_type": ["enum", val["pseudo_type"]]  
                 }
 
-    
-    
-    
-    
     def visit_unicodenode(self, node, location):
         return {'type': 'str', 'value':  node.value, 'pseudo_type': 'str'}
 
-    #def visit_stringnode(self, node, location):
-    #    return {'type': 'str', 'value':  node.value, 'pseudo_type': 'str'}
+    def visit_stringnode(self, node, location):
+        return {'type': 'str', 'value':  node.value, 'pseudo_type': 'str'}
 
     def visit_tuplenode(self, node, args, mult_factor, location):
         element_nodes, accidentaly_homogeneous, element_type = self.visit_elements(
