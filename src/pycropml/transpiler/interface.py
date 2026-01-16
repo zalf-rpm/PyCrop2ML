@@ -22,6 +22,7 @@ class TreeInterface():
     def transform(self, tree,  in_block=False):
         self.nameIndex=[]
         if isinstance(tree, Node):
+            dir_tree = dir(tree)
             if tree.type == "assignment":
                 # I want to check if the target name is an allocatable array
                 #if tree.target.type == "local" and tree.value.type=="array":
@@ -47,9 +48,8 @@ class TreeInterface():
             if tree.type =="for_sequence":
                 self.ForSequence = True
                 self.nbForSeq =self.nbForSeq+1
-            td = tree.__dir__()
-            if tree.type == "custom_call" and (("function" in td and tree.function not in self.dependencies) \
-                    or ("value" in td and "function" in tree.value.__dir__() and tree.value.function not in self.dependencies)):
+            if tree.type == "custom_call" and (("function" in dir_tree and tree.function not in self.dependencies) \
+                    or ("value" in dir_tree and "function" in tree.value.__dir__() and tree.value.function not in self.dependencies)):
                 self.dependencies.append(tree.function)
             if tree.type=="list" and "list" not in self.dependencies:
                 self.dependencies.append("list")

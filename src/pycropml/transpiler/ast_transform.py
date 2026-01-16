@@ -1363,7 +1363,11 @@ class AstTransformer():
                     if isinstance(de.default, ExprNodes.UnaryMinusNode):
                         decl["value"] = str(-float(value_node["value"]["value"]))
                     else:
-                        if type(de.default) in (ExprNodes.IntNode,ExprNodes.UnaryMinusNode, ExprNodes.FloatNode, ExprNodes.UnicodeNode, ExprNodes.BoolNode):
+                        if "StringNode" in dir(ExprNodes):
+                            expr_nodes = [ExprNodes.IntNode,ExprNodes.UnaryMinusNode, ExprNodes.FloatNode, ExprNodes.UnicodeNode, ExprNodes.StringNode, ExprNodes.BoolNode]
+                        else:
+                            expr_nodes = [ExprNodes.IntNode,ExprNodes.UnaryMinusNode, ExprNodes.FloatNode, ExprNodes.UnicodeNode, ExprNodes.BoolNode]
+                        if type(de.default) in expr_nodes:
                             decl["value"] = value_node["value"]
                         else:
                             decl["type"] = value_node["type"]
