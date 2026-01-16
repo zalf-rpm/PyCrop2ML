@@ -912,7 +912,7 @@ class Cpp2Generator(CodeGenerator, CppRules):
         # if self.model:
         #    self.write(f'#ifndef _{self.model.name.upper()}_\n')
 
-        self.write('#define _USE_MATH_DEFINES\n'
+        self.write(#'#define _USE_MATH_DEFINES\n'
                    '#include <cmath>\n'
                    '#include <iostream>\n'
                    '#include <vector>\n'
@@ -1081,7 +1081,7 @@ class Cpp2Generator(CodeGenerator, CppRules):
             else:
                 self.write('return ')
                 if node.value.type == "tuple":
-                    self.write("make_tuple(")
+                    self.write("std::make_tuple(")
                     self.comma_separated_list(node.value.elements)
                     self.write(")")
                 else:
@@ -1121,7 +1121,7 @@ class Cpp2Generator(CodeGenerator, CppRules):
         self.write(u')')
 
     def visit_tuple(self, node):
-        self.write("tie(")
+        self.write("std::tie(")
         self.comma_separated_list(node.elements)
         self.write(")")
 
