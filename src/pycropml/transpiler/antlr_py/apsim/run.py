@@ -2,6 +2,7 @@
 
 from __future__ import absolute_import
 from __future__ import print_function
+from os.path import isdir 
 from path import Path
 import os
 from pycropml.transpiler.antlr_py.to_CASG import to_dictASG, to_CASG
@@ -236,9 +237,6 @@ class Custom_call2(Middleware):
 
                     if len(trees.args) != len(inps):
                         trees.args.extend(inps[len(trees.args):])
-                    """if f.name == "Divide": 
-                        print("Divideeeeeeee", [t.y for t in inps])
-                        print("Divide", [t.y for t in trees.args])"""
                     for num1, ar1 in enumerate(trees.args):
                         for num2, ar2 in enumerate(inps):
                             if num1 == num2:
@@ -573,17 +571,17 @@ f_dest = os.path.join(modelpath,"src","f90",pkg,"list_sub.f90")
 
 def create_package(output):
     crop2ml_rep = Path(os.path.join(output, 'crop2ml'))
-    if not crop2ml_rep.isdir():
+    if not isdir(crop2ml_rep):
         crop2ml_rep.mkdir()
     algo_rep = Path(os.path.join(crop2ml_rep, 'algo'))
-    if not algo_rep.isdir():
+    if not isdir(algo_rep):
         algo_rep.mkdir()
     cyml_rep = Path(os.path.join(algo_rep, 'pyx'))
-    if not cyml_rep.isdir():
+    if not isdir(cyml_rep):
         cyml_rep.mkdir()
     return crop2ml_rep, cyml_rep    
+                  
                 
-
 
 
 def function_dependency(st, f):
@@ -684,8 +682,6 @@ def run_apsim(component, output):
     
     files = repowalk.walk(component, "cs" )
     xfiles = repowalk.walk(component, "xml" )
-    modelp = ModelParser()
-    mp = modelp.parse(component)
     res = {}
     stra = {}
     straNames = []
@@ -735,7 +731,6 @@ def run_apsim(component, output):
     kk = ApsimExtraction()
     #all_var = kk.getAllVar(vinfo)
     all_var = extract_io(list(xfiles.values())[0])
-    #print("all", all_var)
     for k, st in enumerate(strats):
         print(k, st)
         mod = source_codes[k]
@@ -945,10 +940,13 @@ def run_apsim(component, output):
     description["url"] = ""
     description["ExtendedDescription"]="Soil Temperature"
     description["ShortDescription"]="Soil Temperature"
+    
+    modelp = ModelParser()
+    mp = modelp.parse(output)
     mc = createObjectCompo(description,mp)
 
     xml_ = Pl2Crop2ml(mc, "APSIM_").run_compo()
-    filename = os.path.join(pkg, "crop2ml", "composition.%s.xml"%(mp[0].name))
+    filename = os.path.join(output, "crop2ml", "composition.%s.xml"%(mp[0].name))
     with open(filename, "wb") as xml_file:
         r = '<?xml version="1.0" encoding="UTF-8"?>\n'
         r += '<!DOCTYPE ModelComposition PUBLIC " " "https://raw.githubusercontent.com/AgriculturalModelExchangeInitiative/crop2ml/master/ModelComposition.dtd">\n'
