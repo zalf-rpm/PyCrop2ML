@@ -17,4 +17,22 @@
     "allow_concurrent_runs": false,
     "reveal": "always",
   },
+  {
+    "label": "[Linux] pycropml: Monica_SoilTemp -> cpp2",
+    "command": "pixi",
+    "args": [
+      "run",
+      "--manifest-path",
+      "$ZED_WORKTREE_ROOT/pyproject.toml",
+      "python",
+      "$ZED_WORKTREE_ROOT/src/pycropml/main.py",
+      "-p",
+      "Monica_SoilTemp",
+      "cpp2",
+    ],
+    "cwd": "/home/berg/GitHub/monica_amei/SoilTemperatureModels/Models",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+  },
 ]
