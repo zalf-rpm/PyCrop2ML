@@ -245,7 +245,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/xmlformatter-0.2.9-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.2-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/openalea3/noarch/openalea.core-2.5.0-pyh1a96a4e_0.conda
-      - pypi: .
+      - pypi: ./
+      - pypi: https://files.pythonhosted.org/packages/91/4c/e0ce1ef95d4000ebc1c11801f9b944fa5910ecc15b5e351865763d8657f8/graphviz-0.21-py3-none-any.whl
       win-64:
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/alabaster-1.0.0-pyhd8ed1ab_1.conda
@@ -428,7 +429,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/zeromq-4.3.5-h5bddc39_9.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/zstd-1.5.7-h534d264_6.conda
       - conda: https://conda.anaconda.org/openalea3/noarch/openalea.core-2.5.0-pyh1a96a4e_0.conda
-      - pypi: .
+      - pypi: ./
+      - pypi: https://files.pythonhosted.org/packages/91/4c/e0ce1ef95d4000ebc1c11801f9b944fa5910ecc15b5e351865763d8657f8/graphviz-0.21-py3-none-any.whl
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
@@ -5983,6 +5985,45 @@ packages:
   license: CECILL-C
   size: 193725
   timestamp: 1766068265383
-- pypi: .
-  name: pycrop2ml
-  requires_python: '>=3.11'
+- pypi: ./
+  name: pycropml
+  requires_dist:
+  - nbformat
+  - numpy
+  - cython>=0.29.37,<4
+  - networkx
+  - graphviz
+  - pydot
+  - pyyaml
+  - unyt
+  - ipython
+  - antlr4-python3-runtime==4.8
+  - xmlformatter
+  - pandas
+  - pytest ; extra == 'test'
+  - sphinx-favicon ; extra == 'doc'
+  - sphinx-rtd-theme ; extra == 'doc'
+  - pydata-sphinx-theme ; extra == 'doc'
+  - myst-parser ; extra == 'doc'
+  - nbsphinx ; extra == 'doc'
+  requires_python: '>=3.8,<3.13'
+- pypi: https://files.pythonhosted.org/packages/91/4c/e0ce1ef95d4000ebc1c11801f9b944fa5910ecc15b5e351865763d8657f8/graphviz-0.21-py3-none-any.whl
+  name: graphviz
+  version: '0.21'
+  sha256: 54f33de9f4f911d7e84e4191749cac8cc5653f815b06738c54db9a15ab8b1e42
+  requires_dist:
+  - build ; extra == 'dev'
+  - wheel ; extra == 'dev'
+  - twine ; extra == 'dev'
+  - flake8 ; extra == 'dev'
+  - flake8-pyproject ; extra == 'dev'
+  - pep8-naming ; extra == 'dev'
+  - tox>=3 ; extra == 'dev'
+  - pytest>=7,<8.1 ; extra == 'test'
+  - pytest-mock>=3 ; extra == 'test'
+  - pytest-cov ; extra == 'test'
+  - coverage ; extra == 'test'
+  - sphinx>=5,<7 ; extra == 'docs'
+  - sphinx-autodoc-typehints ; extra == 'docs'
+  - sphinx-rtd-theme>=0.2.5 ; extra == 'docs'
+  requires_python: '>=3.9'
