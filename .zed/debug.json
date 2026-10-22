@@ -1,0 +1,16 @@
+[
+  {
+    "label": "[Windows] Debug pycropml: Monica_SoilTemp -> cpp2",
+    "adapter": "Debugpy",
+    "request": "launch",
+    "program": "$ZED_WORKTREE_ROOT/src/pycropml/main.py",
+    "args": ["-p", "Monica_SoilTemp", "cpp2"],
+    "cwd": "C:/Users/berg/GitHub/SoilTemperatureModels/Models",
+    "python": "$ZED_WORKTREE_ROOT/.pixi/envs/default/python.exe",
+    "env": {
+      "PATH": "C:/Users/berg/GitHub/PyCrop2ML/.pixi/envs/default;C:/Users/berg/GitHub/PyCrop2ML/.pixi/envs/default/Library/mingw-w64/bin;C:/Users/berg/GitHub/PyCrop2ML/.pixi/envs/default/Library/usr/bin;C:/Users/berg/GitHub/PyCrop2ML/.pixi/envs/default/Library/bin;C:/Users/berg/GitHub/PyCrop2ML/.pixi/envs/default/Scripts;C:/Users/berg/GitHub/PyCrop2ML/.pixi/envs/default/bin;C:/WINDOWS/system32;C:/WINDOWS;C:/WINDOWS/System32/Wbem",
+    },
+    "console": "integratedTerminal",
+    "justMyCode": false,
+  },
+]
