@@ -81,3 +81,5 @@ nosetests.xml
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+*.code-workspace
+example/apsimcomponent

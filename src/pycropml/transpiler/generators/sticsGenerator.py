@@ -1,8 +1,8 @@
 
-from pycropml.transpiler.generators.fortranGenerator import FortranGenerator, FortranCompo
 import os
+from pathlib import Path
+from pycropml.transpiler.generators.fortranGenerator import FortranGenerator, FortranCompo
 from pycropml.transpiler import lib
-from path import Path
 
 class SticsGenerator(FortranGenerator):
     """ This class contains the specific properties of
@@ -29,7 +29,7 @@ class SticsCompo(FortranCompo):
         self.tree = tree
         self.model = model
         self.name = name
-        pkg = self.model.path.split(os.path.sep)[-1] 
+        pkg = str(self.model.path).split(os.path.sep)[-1]
         dir_lib = Path(os.path.dirname(lib.__file__))
         FortranCompo.__init__(self,tree, model, self.name)
         self.f_dest = os.path.join(self.model.path,"src","stics",pkg,"list_sub.f90") 

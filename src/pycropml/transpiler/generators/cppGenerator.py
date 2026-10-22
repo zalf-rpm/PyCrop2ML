@@ -1,19 +1,20 @@
 # coding: utf8
+import os
+from pathlib import Path
+from copy import deepcopy
+from itertools import chain
+
 from pycropml.transpiler.codeGenerator import CodeGenerator
 from pycropml.nameconvention import signature2, signature2_from_name
 from pycropml.transpiler.rules.cppRules import CppRules
 from pycropml.transpiler.generators.docGenerator import DocGenerator
 from pycropml.transpiler.pseudo_tree import Node
-import os
 from pycropml.transpiler.interface import middleware
-from path import Path
 from pycropml.transpiler.Parser import parser
 from pycropml.transpiler.ast_transform import AstTransformer, transform_to_syntax_tree
 from pycropml import code2nbk
 from pycropml.render_cyml import my_input
 from pycropml.composition import ModelComposition
-from copy import deepcopy
-from itertools import chain
 
 
 class CppGenerator(CodeGenerator, CppRules):
@@ -830,7 +831,7 @@ class CppGenerator(CodeGenerator, CppRules):
         tplte = False
         for pa in params:
             if pa and isinstance(pa.pseudo_type, list) and pa.pseudo_type[0] == "array":
-                if len(pa.elts) == 0:
+                if "elts" not in dir(pa) or len(pa.elts) == 0:
                     tplte = True
                     elt = f"SIZE_{i}"
                     i = i + 1
@@ -905,7 +906,7 @@ class CppGenerator(CodeGenerator, CppRules):
                    '#include <tuple>\n')
         if self.model:
             self.write(f'#include "{self.model.name}.h"\n')
-        self.write(f"using namespace {Path(self.model.path).name};")
+        self.write(f"using namespace {Path(self.model.path).name.replace('-', '_')};")
 
         # self.write("using namespace std;\n")
         self.visit(node.body)
@@ -1682,24 +1683,26 @@ def to_struct_cpp(models, rep, name):
     states = generator.node_states
     generator.generate(states, f"{name}State")
     z = ''.join(generator.result)
-    filename = Path(os.path.join(rep, f"{name}State.cpp"))
-    with open(filename, "wb") as tg_file:
+
+    repp = Path(rep)
+    filename = repp / f"{name}State.cpp"
+    with filename.open("wb") as tg_file:
         tg_file.write(z.encode('utf-8'))
     rates = generator.node_rates
     generator.result = [f'#include "{name}Rate.h"\n']
     generator.result.append(f"using namespace {rep.name};\n")
     generator.generate(rates, f"{name}Rate")
     z1 = ''.join(generator.result)
-    filename = Path(os.path.join(rep, f"{name}Rate.cpp"))
-    with open(filename, "wb") as tg1_file:
+    filename = repp / f"{name}Rate.cpp"
+    with filename.open("wb") as tg1_file:
         tg1_file.write(z1.encode('utf-8'))
     auxiliary = generator.node_auxiliary
     generator.result = [f'#include "{name}Auxiliary.h"\n']
     generator.result.append(f"using namespace {rep.name};\n")
     generator.generate(auxiliary, f"{name}Auxiliary")
     z2 = ''.join(generator.result)
-    filename = Path(os.path.join(rep, f"{name}Auxiliary.cpp"))
-    with open(filename, "wb") as tg2_file:
+    filename = repp / f"{name}Auxiliary.cpp"
+    with filename.open("wb") as tg2_file:
         tg2_file.write(z2.encode('utf-8'))
 
     exogenous = generator.node_exogenous
@@ -1707,8 +1710,8 @@ def to_struct_cpp(models, rep, name):
     generator.result.append(f"using namespace {rep.name};\n")
     generator.generate(exogenous, f"{name}Exogenous")
     z2 = ''.join(generator.result)
-    filename = Path(os.path.join(rep, f"{name}Exogenous.cpp"))
-    with open(filename, "wb") as tg2_file:
+    filename = repp / f"{name}Exogenous.cpp"
+    with filename.open("wb") as tg2_file:
         tg2_file.write(z2.encode('utf-8'))
     return 0
 
@@ -1727,11 +1730,14 @@ def header_cpp(models, rep, name):
 """]
     generator.model2Node()
 
+    rep = Path(rep)
+
     states = generator.node_states
     generator.generate_hpp(states, f"{name}State", dc=True, ns=rep.name)
     z = ''.join(generator.result)
-    filename = Path(os.path.join(rep, f"{name}State.h"))
-    with open(filename, "wb") as tg_file:
+
+    filename = rep / f"{name}State.h"
+    with filename.open("wb") as tg_file:
         tg_file.write(z.encode('utf-8'))
 
     rates = generator.node_rates
@@ -1746,8 +1752,8 @@ def header_cpp(models, rep, name):
 """]
     generator.generate_hpp(rates, f"{name}Rate", dc=True, ns=rep.name)
     z1 = ''.join(generator.result)
-    filename = Path(os.path.join(rep, f"{name}Rate.h"))
-    with open(filename, "wb") as tg1_file:
+    filename = rep / f"{name}Rate.h"
+    with filename.open("wb") as tg1_file:
         tg1_file.write(z1.encode('utf-8'))
 
     auxiliary = generator.node_auxiliary
@@ -1762,8 +1768,8 @@ def header_cpp(models, rep, name):
 """]
     generator.generate_hpp(auxiliary, f"{name}Auxiliary", dc=True, ns=rep.name)
     z2 = ''.join(generator.result)
-    filename = Path(os.path.join(rep, f"{name}Auxiliary.h"))
-    with open(filename, "wb") as tg2_file:
+    filename = rep / f"{name}Auxiliary.h"
+    with filename.open("wb") as tg2_file:
         tg2_file.write(z2.encode('utf-8'))
 
     exogenous = generator.node_exogenous
@@ -1778,8 +1784,8 @@ def header_cpp(models, rep, name):
 """]
     generator.generate_hpp(exogenous, f"{name}Exogenous", dc=True, ns=rep.name)
     z2 = ''.join(generator.result)
-    filename = Path(os.path.join(rep, f"{name}Exogenous.h"))
-    with open(filename, "wb") as tg2_file:
+    filename = rep / f"{name}Exogenous.h"
+    with filename.open("wb") as tg2_file:
         tg2_file.write(z2.encode('utf-8'))
 
     return 0
@@ -1787,24 +1793,24 @@ def header_cpp(models, rep, name):
 
 def header_mu_cpp(models, rep, name):
     mc = models[0].name
-    h = []
-    init = False
     for m in models[0].model:
+        h = []
         if m.function:
+            from pycropml.transpiler.main import Main
+            V = "from math import *\n"
             for mf in m.function:
                 file_func = mf.filename
-                path_func = Path(os.path.join(m.path, "crop2ml", file_func))
-                func_tree = parser(Path(path_func))
-                newtree = AstTransformer(func_tree, path_func, m)
-                # print(newtree)
-                dict_ast = newtree.transformer()
-                node_ast = transform_to_syntax_tree(dict_ast)
-                z = {}
-                for f in filter(lambda x: x.type == "function_definition", node_ast.body):
-                    z[f.name] = [f.return_type, f.params]
-                h.append(z)
-        if m.initialization:
-            init = True
+                path_func = Path(m.path) / "crop2ml" / file_func
+                with path_func.open('r') as file:
+                    V += file.read() + "\n\n"
+            cst = Main(V, 'cpp')
+            cst.parse()
+            node_ast = cst.to_ast(V)
+            z = {}
+            for f in filter(lambda x: x.type == "function_definition", node_ast.body):
+                z[f.name] = [f.return_type, f.params]
+            h = [z]
+        init = len(m.initialization) > 0
         generator = CppTrans([m])
         generator.result = [f'''
 #pragma once
@@ -1822,34 +1828,31 @@ def header_mu_cpp(models, rep, name):
         param = generator.node_param
         generator.generate_hpp(param, f"{m.name}", mc=mc, h=h, init=init, ns=rep.name)
         z = ''.join(generator.result)
-        filename = Path(os.path.join(rep, f"{m.name}.h"))
-        with open(filename, "wb") as tg_file:
+        filename = Path(rep) / f"{m.name}.h"
+        with filename.open("wb") as tg_file:
             tg_file.write(z.encode('utf-8'))
-        h = []
 
 
 def header_mu_cpp2(model, rep, name):
-    #mc = models[0].name
     mc = model.name
     m = model
     h = []
-    init = False
-    #for m in models[0].model:
     if m.function:
+        from pycropml.transpiler.main import Main
+        V = "from math import *\n"
         for mf in m.function:
             file_func = mf.filename
-            path_func = Path(os.path.join(m.path, "crop2ml", file_func))
-            func_tree = parser(Path(path_func))
-            newtree = AstTransformer(func_tree, path_func, m)
-            # print(newtree)
-            dict_ast = newtree.transformer()
-            node_ast = transform_to_syntax_tree(dict_ast)
-            z = {}
-            for f in filter(lambda x: x.type == "function_definition", node_ast.body):
-                z[f.name] = [f.return_type, f.params]
-            h.append(z)
-    if m.initialization:
-        init = True
+            path_func = Path(m.path) / "crop2ml" / file_func
+            with path_func.open('r') as file:
+                V += file.read() + "\n\n"
+        cst = Main(V, 'cpp')
+        cst.parse()
+        node_ast = cst.to_ast(V)
+        z = {}
+        for f in filter(lambda x: x.type == "function_definition", node_ast.body):
+            z[f.name] = [f.return_type, f.params]
+        h = [z]
+    init = len(m.initialization) > 0
     generator = CppTrans([m])
     generator.result = [f'''
 #pragma once
@@ -1867,8 +1870,8 @@ def header_mu_cpp2(model, rep, name):
     param = generator.node_param
     generator.generate_hpp(param, f"{m.name}", mc=mc, h=h, init=init, ns=rep.name)
     z = ''.join(generator.result)
-    filename = Path(os.path.join(rep, f"{m.name}.h"))
-    with open(filename, "wb") as tg_file:
+    filename = Path(rep) / f"{m.name}.h"
+    with filename.open("wb") as tg_file:
         tg_file.write(z.encode('utf-8'))
     h = []
 
@@ -1885,8 +1888,8 @@ def headerCompo(models, rep, name):
     param = generator.node_param
     generator.generate_hpp(param, f"{mc}Component", mc=mc, h=h, init=True, iscompo=True, ns=rep.name)
     z = ''.join(generator.result)
-    filename = Path(os.path.join(rep, f"{mc}Component.h"))
-    with open(filename, "wb") as tg_file:
+    filename = Path(rep) / f"{mc}Component.h"
+    with filename.open("wb") as tg_file:
         tg_file.write(z.encode('utf-8'))
 
 
@@ -1900,7 +1903,7 @@ class CppCompo(CppTrans):
         self.name = modelt.name
         self.init = False
         self.write(f'#include "{self.name}Component.h"\n')
-        self.write(f"using namespace {modelt.path.name};\n")
+        self.write(f"using namespace {modelt.path.name.replace('-', '_')};\n")
         self.modeltparams = [pa.name for pa in self.modelt.inputs if "parametercategory" in dir(pa)]
         self.model2Node()
         self.statesName = [st.name for st in self.states]
@@ -2295,8 +2298,8 @@ def to_wrapper_cpp(models, rep, name):
     generator.model2Node()
     generator.wrapper()
     z = ''.join(generator.result)
-    filename = Path(os.path.join(rep, f"{name}Wrapper.cpp"))
-    with open(filename, "wb") as tg2_file:
+    filename = Path(rep) / f"{name}Wrapper.cpp"
+    with filename.open("wb") as tg2_file:
         tg2_file.write(z.encode('utf-8'))
     return 0
 

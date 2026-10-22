@@ -1,10 +1,10 @@
 # coding: utf8
+import os
+
 from pycropml.transpiler.codeGenerator import CodeGenerator
 from pycropml.transpiler.rules.rRules import RRules, changetyp
 from pycropml.transpiler.generators.docGenerator import DocGenerator
-import os
 from pycropml.render_cyml import signature
-from path import Path
 from pycropml.transpiler.Parser import parser
 from pycropml.transpiler.ast_transform import AstTransformer, transform_to_syntax_tree
 from pycropml.nameconvention import signature2, signature2_from_name
@@ -385,7 +385,11 @@ class RGenerator(CodeGenerator, RRules):
                 self.newline(node)
                 self.write(n.name)
                 self.write(" <- ")                 
-                self.write(n.value)
+                if isinstance(n.value, str):
+                    self.write(n.value)
+                else:
+                    # n.value is a Node (e.g., unary_op for -999), so visit it
+                    self.visit(n.value)
             elif "value" not in dir(n) and n.type =="int":
                 self.newline(node)
                 self.write(n.name)
@@ -450,17 +454,24 @@ class RGenerator(CodeGenerator, RRules):
         pass              
 
 
-    def visit_array(self,node): 
-        if node.elements.type != "list":
-            self.write(" rep(")  
-            self.visit(node.elements.left.elements[0])
-            self.write(",")
-            self.visit(node.elements.right) 
-            self.write(")")            
-        else: 
+    def visit_array(self, node):
+        if isinstance(node.elements, list):
+            # liste littérale : array('f', [0.98, 0.91, ...])
             self.write("c(")
             self.comma_separated_list(node.elements)
             self.write(")")
+        elif node.elements.type != "list":
+            # pattern "rep" : array(typecode, [x]*n)
+            self.write(" rep(")
+            self.visit(node.elements.left.elements[0])
+            self.write(",")
+            self.visit(node.elements.right)
+            self.write(")")
+        else:
+            self.write("c(")
+            self.comma_separated_list(node.elements)
+            self.write(")")
+
 
     
     

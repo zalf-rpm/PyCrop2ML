@@ -3,10 +3,9 @@
 from __future__ import absolute_import
 from __future__ import print_function
 import os
-from os.path import isdir
 from copy import deepcopy
 from typing import *
-from path import Path
+from pathlib import Path
 
 import networkx as nx
 import itertools
@@ -30,6 +29,18 @@ from pycropml.transpiler.antlr_py.to_specification import extractMetaInfo, creat
 from copy import deepcopy, copy
 
 description_tags = ["//%%CyML Description Begin%%", "//%%CyML Description End%%"]
+
+
+def _flatten_extfunc(funcs):
+    extfunc = []
+    for func in funcs:
+        if not func:
+            continue
+        if isinstance(func, list):
+            extfunc.extend(func)
+        else:
+            extfunc.append(func)
+    return extfunc
 
 
 """ Read BioMA component and extract metadata
@@ -395,7 +406,6 @@ class Member_access2(Middleware):
         name = tree.member
         if "." in name: 
             name = name.split('.')[0]
-            print("member accessssssssssssssssssssssss", tree.y)
         pseudo = tree.pseudo_type
         self.members.append(tree)
         # retrieve the class name
@@ -487,15 +497,12 @@ class For_statement2(Middleware):
         return tree 
 
 def create_package(output):
-    crop2ml_rep = Path(os.path.join(output, 'crop2ml'))
-    if not isdir(crop2ml_rep):
-        crop2ml_rep.mkdir()
-    algo_rep = Path(os.path.join(crop2ml_rep, 'algo'))
-    if not isdir(algo_rep):
-        algo_rep.mkdir()
-    cyml_rep = Path(os.path.join(algo_rep, 'pyx'))
-    if not isdir(cyml_rep):
-        cyml_rep.mkdir()
+    crop2ml_rep = Path(output) / 'crop2ml'
+    crop2ml_rep.mkdir(exist_ok=True)
+    algo_rep = crop2ml_rep / 'algo'
+    algo_rep.mkdir(exist_ok=True)
+    cyml_rep = algo_rep / 'pyx'
+    cyml_rep.mkdir(exist_ok=True)
     return crop2ml_rep, cyml_rep    
                 
 
@@ -710,10 +717,10 @@ def run_csharp(component, output):
     source_codes=[]
     compo_codes = []
     for  k, v in files.items():
-        with open(v, 'r') as f:
+        with open(v, 'r', encoding="utf-8-sig") as f:
             code = f.read()
         if code :
-            if code.startswith("ï»¿"): code = code[3:]
+            #if code.startswith("ï»¿"): code = code[3:]
             splitcode = code.split('\n')
             zz = map(lambda x: x.lstrip(), splitcode)
             codelist = [n  for n in zz if not n.startswith("#") ]
@@ -740,18 +747,19 @@ def run_csharp(component, output):
     strats = list(stra.values())
     compos = list(compo.values())
     models = []
-    func_names = []
     kk = CsharpExtraction()
     all_var = kk.getAllVar(source_codes)
     for k, st in enumerate(strats):
+        func_names = []
         print(k, st)
         mod = source_codes[k]
         z = CsharpExtraction(code=mod) 
         var =  z.totalvar(st)
         algo = z.getAlgo(st)
         init_ = z.getInit(st)
-        funcs = z.externFunction(st, algo.block + init_.block, False) 
-        funcs = [f for f in funcs if f]
+        funcs = z.externFunction(st, algo.block + init_.block, False) if (init_ and init_.block is not None) else  z.externFunction(st, algo.block, False)
+        funcs = [f for f in funcs if f and f.name not in func_names]
+        print("funcs", [f.name for f in funcs])
         commentsPart = extraction(mod, description_tags[0], description_tags[1])
         mdata = extract(commentsPart[0]+"\n\n")
         strat_var = z.getStrategyVar()
@@ -769,6 +777,8 @@ def run_csharp(component, output):
                  
         if funcs:
             for f in funcs:
+                print("function dependency for ", f.name)
+                #func_names.append(f.name)
                 r = []
                 # order of function dependency
                 f_dep = function_dependency(st, f)
@@ -781,14 +791,18 @@ def run_csharp(component, output):
                         dep_names.append(d.name)   
                 for ex in dep:  # dep is the list of external function in the order of dependency
                     if ex.name not in func_names:  # to avoid duplicating dependent functions in different auxiliary functions
-                        func = z.externFunction(total_tree, ex, False, ex.name)  
-                        extfunc = [p for p in func if p]
-                        if extfunc and isinstance(extfunc[0], list):
-                            extfunc = list(itertools.chain(*extfunc)) 
-                        for rr in extfunc:
+                        func = z.externFunction(st, ex, False, ex.name)
+                        if not any(func):
+                            func = z.externFunction(total_tree, ex, False, ex.name)
+                        extfunc = _flatten_extfunc(func)
+                        renamed_extfunc = []
+                        for rro in extfunc:
+                            rr = copy(rro)
                             if ex.class_!= rr.class_:
                                 rr.name = "_" + rr.class_ + "__" + rr.name +"_" 
                                 params_not_declared[rr.name]   = [] 
+                            renamed_extfunc.append(rr)
+                        extfunc = renamed_extfunc
                         res = []
                         res_ = []
                         res_inout[ex.name] = {"inputs":None, "outputs":None}
@@ -893,8 +907,8 @@ def run_csharp(component, output):
                 h = cd.transform()
                 nd = transform_to_syntax_tree(h)
                 code = writeCyml(nd) 
-                filename = Path(os.path.join(cyml_rep, "%s.pyx"%(name)))
-                with open(filename, "wb") as tg_file:
+                filename = Path(cyml_rep) / ("%s.pyx" % (name))
+                with filename.open("wb") as tg_file:
                     tg_file.write(code.encode('utf-8'))
                     
         rr, vv = translate(total_tree, z.dclassdict, algo.block, params_not_declared_, res_inout, member_category, dict_pa)
@@ -905,15 +919,15 @@ def run_csharp(component, output):
         nd = transform_to_syntax_tree(h)
         code = writeCyml(nd)
          
-        filename = Path(os.path.join(cyml_rep, "%s.pyx"%(straNames[k])))
-        with open(filename, "wb") as tg_file:
+        filename = Path(cyml_rep) / ("%s.pyx" % (straNames[k]))
+        with filename.open("wb") as tg_file:
             tg_file.write(code.encode('utf-8'))        
 
         dict_init = {}
         inps_init = []
         outs_init = []
         
-        if init_:
+        if init_ and init_.block is not None:
             rr_, init_pseudo = translate(total_tree, z.dclassdict, init_.block, params_not_declared_, res_inout, member_category, dict_pa)
             dict_init = {}
             name_i = "init."+straNames[k]
@@ -924,8 +938,8 @@ def run_csharp(component, output):
             h = cd.transform()
             nd = transform_to_syntax_tree(h)
             initcode = writeCyml(nd)
-            filename = Path(os.path.join(cyml_rep, "init.%s.pyx"%(straNames[k])))
-            with open(filename, "wb") as tg_file:
+            filename = Path(cyml_rep) / ("init.%s.pyx" % (straNames[k]))
+            with filename.open("wb") as tg_file:
                 tg_file.write(initcode.encode('utf-8'))         
             zz2 = CheckingInOut2( {},isAlgo = True)
             r_ch = zz2.process(init_pseudo)
@@ -936,14 +950,14 @@ def run_csharp(component, output):
         outs_str = zz.outputs + outs_init
         
         z.modelunit(mdata, strat_var, all_var_pa,var,  list(set(inps_str)), list(set(outs_str)))
-        z.model.function = [n.name for n in funcs if f]
+        z.model.function = [n.name for n in funcs if n]
         if dict_init: z.model.initialization = [dict_init]
 
         models.append(z.model)
 
         xml_ = Pl2Crop2ml(z.model, "Crop2ML."+pkg).run_unit() 
-        filename = Path(os.path.join(crop2ml_rep, "unit.%s.xml"%(straNames[k])))
-        with open(filename, "wb") as xml_file:
+        filename = Path(crop2ml_rep) / ("unit.%s.xml" % (straNames[k]))
+        with filename.open("wb") as xml_file:
             #xml_file.write(xml_.unicode(indent=4).encode('utf-8'))
             r = '<?xml version="1.0" encoding="UTF-8"?>\n'
             r += '<!DOCTYPE ModelUnit PUBLIC " " "https://raw.githubusercontent.com/AgriculturalModelExchangeInitiative/crop2ml/master/ModelUnit.dtd">\n'
@@ -956,8 +970,8 @@ def run_csharp(component, output):
         z.modelcomposition(models,compo, mdatac)
         xml_ = Pl2Crop2ml(z.mc, "Crop2ML."+pkg).run_compo()
         name = z.mc.name[:-9] if z.mc.name.endswith("Component") else z.mc.name
-        filename = Path(os.path.join(crop2ml_rep, "composition.%s.xml"%(name)))
-        with open(filename, "wb") as xml_file:
+        filename = Path(crop2ml_rep) / ("composition.%s.xml" % (name))
+        with filename.open("wb") as xml_file:
             #xml_file.write(xml_.unicode(indent=4).encode('utf-8'))
             r = '<?xml version="1.0" encoding="UTF-8"?>\n'
             r += '<!DOCTYPE ModelComposition PUBLIC " " "https://raw.githubusercontent.com/AgriculturalModelExchangeInitiative/crop2ml/master/ModelComposition.dtd">\n'

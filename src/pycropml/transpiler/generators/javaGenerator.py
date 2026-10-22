@@ -1,18 +1,19 @@
 # coding: utf8
+import os
+from copy import copy
+from pathlib import Path
+
 from importlib.machinery import ExtensionFileLoader
 from pycropml.transpiler.codeGenerator import CodeGenerator
 from pycropml.transpiler.rules.javaRules import JavaRules
 from pycropml.transpiler.generators.docGenerator import DocGenerator
 from pycropml.transpiler.pseudo_tree import Node
-import os
 from pycropml.transpiler.interface import middleware
-from path import Path
 from pycropml.transpiler.Parser import parser
 from pycropml.transpiler.ast_transform import AstTransformer, transform_to_syntax_tree
 from pycropml.transpiler.antlr_py.api_declarations import Middleware
-from pycropml.nameconvention import signature2
+from pycropml.nameconvention import signature2, signature2_from_name
 from pycropml.composition import ModelComposition
-from copy import copy
 
 
 class Custom_call(Middleware):
@@ -71,7 +72,22 @@ class JavaGenerator(CodeGenerator,JavaRules):
 
 
     def visit_comparison(self, node):
-        self.visit_binary_op(node)
+        operands = (node.left, node.right)
+        compares_strings = any(
+            operand.type == "str"
+            or getattr(operand, "pseudo_type", None) == "str"
+            for operand in operands
+        )
+        if node.op in ("==", "!=") and compares_strings:
+            if node.op == "!=":
+                self.write("!")
+            self.write("Objects.equals(")
+            self.visit(node.left)
+            self.write(", ")
+            self.visit(node.right)
+            self.write(")")
+        else:
+            self.visit_binary_op(node)
         
     def visit_binary_op(self, node):
         op = node.op
@@ -238,25 +254,38 @@ class JavaGenerator(CodeGenerator,JavaRules):
             self.write(u"]")
 
     def visit_sliceindex(self, node):
-        self.visit(node.receiver)
-        self.write(u"[")
-        if node.message=="sliceindex_from":
-            self.visit(node.args)
-            self.write(u":")
-        if node.message=="sliceindex_to":
-            self.write(u":")
-            self.visit(node.args)
-        if node.message=="sliceindex":
+        # Java has no slice syntax: translate a[from:to] into a value-producing
+        # copy, since the target/target-only cases (a[from:to] = ...) are
+        # already special-cased with System.arraycopy in visit_assignment.
+        is_list = isinstance(node.pseudo_type, list) and node.pseudo_type[0] == "list"
+        if is_list:
+            self.visit(node.receiver)
+            self.write(".subList(")
+        else:
+            self.write("Arrays.copyOfRange(")
+            self.visit(node.receiver)
+            self.write(", ")
+        if node.message in ("sliceindex", "sliceindex_from"):
             self.visit(node.args[0])
-            self.write(u":")
+        else:
+            self.write("0")
+        self.write(", ")
+        if node.message == "sliceindex":
             self.visit(node.args[1])
-        self.write(u"]")
+        elif node.message == "sliceindex_to":
+            self.visit(node.args[0])
+        else:
+            self.visit(node.receiver)
+            self.write(".size()" if is_list else ".length")
+        self.write(")")
     
     def visit_assignment(self, node):
         if node.value.type == "binary_op" and node.value.left.type == "list":
+            # e.g. up_depth = [0] * n -> refill the already-allocated backing
+            # store; List and array need their own idiomatic "fill" call.
+            is_list = isinstance(node.target.pseudo_type, list) and node.target.pseudo_type[0] == "list"
+            self.write("Collections.fill(" if is_list else "Arrays.fill(")
             self.visit(node.target)
-            self.write(".fill(")
-            self.visit(node.value.right)
             self.write(", ")
             self.visit(node.value.left.elements[0])
             self.write(");")
@@ -326,6 +355,16 @@ class JavaGenerator(CodeGenerator,JavaRules):
                 self.visit(node.value)
                 self.write(");")
                 self.newline(node)     
+            elif node.value.type=="array" and "elts" in dir(node.value) and \
+                    isinstance(node.target.pseudo_type, list) and node.target.pseudo_type[0] == "list":
+                # e.g. up_depth.allocate(n) rewritten to up_depth = array(elts=[n]);
+                # the target is really a List, not a Java array.
+                java_zero = {"int": "0", "float": "0.0", "bool": "false"}.get(node.target.pseudo_type[1], "null")
+                self.visit(node.target)
+                self.write(" = new ArrayList<>(Collections.nCopies(")
+                self.visit(node.value.elts[0])
+                self.write(", %s));"%java_zero)
+                self.newline(node)
             elif node.value.type=="array" and "elements" in dir(node.value):
                 if "right" in dir(node.value.elements):
                     self.visit(node.target)
@@ -342,12 +381,9 @@ class JavaGenerator(CodeGenerator,JavaRules):
                     self.write("Arrays.fill(")
                     self.visit(node.target)
                     self.write(", ")
-                    self.visit(node.value.elements.left.elements[0])  
-                    self.write(");")  
+                    self.visit(node.value.elements.left.elements[0])
+                    self.write(");")
                 else:
-                    self.visit(node.target)
-                    self.write(' = ')
-                    self.write("new %s[] "%self.types2[node.value.pseudo_type[1]])
                     self.write(u'{')
                     self.comma_separated_list(node.value.elements)
                     self.write(u'};') 
@@ -551,7 +587,7 @@ class JavaGenerator(CodeGenerator,JavaRules):
             self.newline(node)      
             self.write("public void ")
             self.write(" Calculate_Model(") if not node.name.startswith("init_") else self.write("Init(")
-            self.write('%sState s, %sState s1, %sRate r, %sAuxiliary a,  %sExogenous ex)'%(self.name, self.name,self.name, self.name, self.name))
+            self.write('%sState s, %sState s1, %sRate r, %sAuxiliary a,  %sExogenous ex)'%((self.name,)*5))
             self.newline(node)
             self.write('{') 
             self.newline(node)
@@ -1252,30 +1288,30 @@ def to_struct_java(models, rep, name):
     states = generator.node_states
     generator.generate(states, "%sState"%name)
     z= ''.join(generator.result)
-    filename = Path(os.path.join(rep,"%sState.java"%name))
-    with open(filename, "wb") as tg_file:
+    filename = Path(rep) / ("%sState.java" % name)
+    with filename.open("wb") as tg_file:
         tg_file.write(z.encode('utf-8'))
     rates = generator.node_rates
     generator.result=[u"import  java.io.*;\nimport  java.util.*;\nimport java.time.LocalDateTime;\n"]
     generator.generate(rates, "%sRate"%name)
     z1= ''.join(generator.result)
-    filename = Path(os.path.join(rep, "%sRate.java"%name))
-    with open(filename, "wb") as tg1_file:
+    filename = Path(rep) / ("%sRate.java" % name)
+    with filename.open("wb") as tg1_file:
         tg1_file.write(z1.encode('utf-8'))
     auxiliary = generator.node_auxiliary
     generator.result=[u"import  java.io.*;\nimport  java.util.*;\nimport java.time.LocalDateTime;\n"]
     generator.generate(auxiliary, "%sAuxiliary"%name)
     z2= ''.join(generator.result)
-    filename = Path(os.path.join(rep/"%sAuxiliary.java"%name))
-    with open(filename, "wb") as tg2_file:
+    filename = Path(rep) / ("%sAuxiliary.java" % name)
+    with filename.open("wb") as tg2_file:
         tg2_file.write(z2.encode('utf-8')) 
 
     exogenous = generator.node_exogenous
     generator.result=[u"import  java.io.*;\nimport  java.util.*;\nimport java.time.LocalDateTime;\n"]
     generator.generate(exogenous, "%sExogenous"%name)
     z2= ''.join(generator.result)
-    filename = Path(os.path.join(rep/"%sExogenous.java"%name))
-    with open(filename, "wb") as tg2_file:
+    filename = Path(rep) / ("%sExogenous.java" % name)
+    with filename.open("wb") as tg2_file:
         tg2_file.write(z2.encode('utf-8'))  
     return 0
 
@@ -1360,7 +1396,7 @@ class JavaCompo(JavaTrans, JavaGenerator):
         else:
             self.write("Init(")
             self.init=True
-        self.write('%sState s, %sState s1, %sRate r, %sAuxiliary a, %sExogenous ex)'%(self.name,self.name,self.name,self.name,self.name))
+        self.write('%sState s, %sState s1, %sRate r, %sAuxiliary a, %sExogenous ex)'%((signature2(self.model),)*5))
         self.newline(node)
         self.write('{') 
         self.newline(node)
@@ -1373,7 +1409,7 @@ class JavaCompo(JavaTrans, JavaGenerator):
         self.newline(node)
         if not node.name.startswith("init_"):
             self.private(self.node_param)
-            typ = self.model.name+"Component"
+            typ = "%sComponent"%signature2(self.model)
             self.write(self.copy_constr_compo%(typ,typ))###### copy constructor 
             self.copyconstructor(self.node_param)
             self.newline(extra=1)
@@ -1488,7 +1524,7 @@ class JavaCompo(JavaTrans, JavaGenerator):
         listmo=[]
         for inp in self.model.inputlink:
             var = inp["source"]
-            mod = inp["target"].split(".")[0]
+            mod = signature2_from_name(inp["target"].split(".")[0])
             modvar = inp["target"].split(".")[1]
             if var==varname:
                 listmo.append({mod:modvar})
@@ -1508,7 +1544,7 @@ class JavaCompo(JavaTrans, JavaGenerator):
             if arg.name in self.getRealInputs():
                 if isinstance(arg.pseudo_type, list):
                     if arg.pseudo_type[0] =="list":
-                        self.write("    this.%s"%self.copy_constrList%(arg.name,arg.name,arg.name))
+                        self.write("    this.%s"%self.copy_constrList%(arg.name,self.types2[arg.pseudo_type[1]],arg.name,arg.name,arg.name,arg.name))
                     if arg.pseudo_type[0] =="array":
                         self.write("    %s"%self.copy_constrArray%(arg.elts[0].value if "value" in dir(arg.elts[0]) else f'toCopy.get{arg.name}().length',arg.name,arg.name))
                 else:

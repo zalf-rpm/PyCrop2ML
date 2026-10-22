@@ -1,10 +1,9 @@
-from pycropml.transpiler.generators.javaGenerator import JavaGenerator, Custom_call
 from copy import deepcopy
 import os
-import six
+from pathlib import Path
+
+from pycropml.transpiler.generators.javaGenerator import JavaGenerator, Custom_call
 from pycropml.transpiler.antlr_py.toxml import Namespace
-import os
-from path import Path
 from pycropml.nameconvention import signature2
 from pycropml.transpiler.pseudo_tree import Node
 
@@ -55,7 +54,7 @@ class SimplaceGenerator(JavaGenerator):
                 listvar.append(va.name)
 
     def visit_module(self, node):
-        package = self.model.path.split(os.sep)[-1]
+        package = Path(self.model.path).name.replace("-", "_")
         self.module = node
         self.extfuncs = []
         self.write(f"package net.simplace.sim.components.{package};")
@@ -106,7 +105,7 @@ class SimplaceGenerator(JavaGenerator):
                         self.write("List<%s> %s%s = new ArrayList<>(Arrays.asList());"%("t_" if n.name in self.var else "",self.types2[n.pseudo_type[1]],n.name))
                     if n.type=="array":
                         self.write(self.types[n.type]%(self.types2[n.pseudo_type[1]], n.name))
-                        if n.elts:
+                        if "elts" in dir(n) and n.elts:
                             self.write(f" = new {self.types2[n.pseudo_type[1]]}")
                             for n in n.elts: 
                                 self.write('[')
@@ -444,7 +443,7 @@ class SimplaceGenerator(JavaGenerator):
                     run_param = params.copy()
                     run_param.update(ins)
 
-                    for k, v in six.iteritems(run_param):
+                    for k, v in run_param.items():
                         self.write(f'FWSimVariable.setValue({transf(type_in[k],v)}, iFieldMap.get("{self.model.name}.{k}"), this);')
                         self.newline()
                     
@@ -459,7 +458,7 @@ class SimplaceGenerator(JavaGenerator):
                     self.newline(1)	
                     self.indentation+=1	
 
-                    for k, v in six.iteritems(outs):
+                    for k, v in outs.items():
                         self.write(f'FWSimVariable.setValue({transf(type_out[k],v[0])}, iFieldMap.get("{self.model.name}.{k}"), this);')
                         self.newline()
                     
@@ -562,9 +561,10 @@ class SimplaceGenerator(JavaGenerator):
                 vars.append(inp.name)
                 
                 self.newline(node)
-                zmin = transf(inp.datatype, inp.min) if (hasattr(inp, "min") and inp.min) else "null"
-                zmax = transf(inp.datatype, inp.max) if (hasattr(inp, "max") and inp.max) else "null"
-                zdefault = transf(inp.datatype, inp.default) if hasattr(inp, "default") else  transf(inp.datatype, "") 
+                missing = "0" if inp.datatype == "INT" else "0.0" if inp.datatype == "DOUBLE" else "null"
+                zmin = transf(inp.datatype, inp.min) if (hasattr(inp, "min") and inp.min) else missing
+                zmax = transf(inp.datatype, inp.max) if (hasattr(inp, "max") and inp.max) else missing
+                zdefault = transf(inp.datatype, inp.default) if hasattr(inp, "default") else  transf(inp.datatype, "")
                 unit = inp.unit
 
                 if inp.datatype.startswith("DATE"): zmin, zmax,zdefault= "null", "null", "null"
@@ -583,9 +583,11 @@ class SimplaceCompo(JavaGenerator):
         JavaGenerator.__init__(self, tree, model, self.name)
     
     def visit_module(self, node):
-        xml_ = Pl2Crop2ml(self.model, "Simplace.SoilTemp").run_simplace()             
-        filename = os.path.join(self.model.model[0].path,  "src", "simplace",  self.model.path, "%s.xml"%(self.model.name)) # "unit.%s.xml"%(strat.basename().split(".")[0])
-        with open(filename, "wb") as xml_file:
+        xml_ = Pl2Crop2ml(self.model, "Simplace.SoilTemp").run_simplace()    
+        print("iiiiiiiiiiiii", xml_)         
+        package = Path(self.model.path).name.replace("-", "_")
+        filename = Path(self.model.model[0].path) / "src" / "simplace" / package / ("%s.xml" % self.model.name)
+        with filename.open("wb") as xml_file:
             r = '<?xml version="1.0" encoding="UTF-8"?>\n'
             r += '<!DOCTYPE configuration PUBLIC "-//SIMPLACE/DTD GRP 1.0//EN" "http://simplace.net/dtd/GroupComponent.dtd">\n'
             r += xml_.unicode(indent=4)#.encode('utf-8')
@@ -613,8 +615,8 @@ class Pl2Crop2ml(object):
     
     def run_simplace(self):
         md = self.md
-        package = md.path.split(os.sep)[-1]
-        
+        package = Path(md.path).name.replace("-", "_")
+
         xml = ns.configuration(Class=f"net.simplace.sim.components.{package}.{md.name}")
         
         simg = ns.simgroup()
@@ -712,12 +714,15 @@ DATA_TYPE = {
 
 
 def transfInt(type_v,elem):
-    if isinstance(elem, str) and elem.strip() =="": return "null"
+    if elem is None or (isinstance(elem, str) and elem.strip() in ("", "None")): return "0"
     return str(elem)
 
 def transfDouble(type_v,elem):
-    if isinstance(elem, str) and elem.strip() =="": return "null"
-    return str(elem)   
+    if elem is None or (isinstance(elem, str) and elem.strip() in ("", "None")): return "0.0"
+    value = float(elem)
+    if value.is_integer():
+        return "%d.0" % value
+    return str(value)
 
 def transfString(type_v, elem): 
     if isinstance(elem, str) and elem.strip() =="": return 'null'

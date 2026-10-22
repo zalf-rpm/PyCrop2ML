@@ -3,10 +3,9 @@
 from __future__ import absolute_import
 from __future__ import print_function
 import os
-from os.path import isdir
 from copy import deepcopy
 from typing import *
-from path import Path
+from pathlib import Path
 
 import networkx as nx
 import itertools
@@ -63,15 +62,9 @@ pseudo_type_={
     
 
 def create_package(output):
-    crop2ml_rep = Path(os.path.join(output, 'crop2ml'))
-    if not isdir(crop2ml_rep):
-        crop2ml_rep.mkdir()
-    algo_rep = Path(os.path.join(crop2ml_rep, 'algo'))
-    if not isdir(algo_rep):
-        algo_rep.mkdir()
-    cyml_rep = Path(os.path.join(algo_rep, 'pyx'))
-    if not isdir(cyml_rep):
-        cyml_rep.mkdir()
+    crop2ml_rep = Path(output) / "crop2ml"
+    cyml_rep = crop2ml_rep / "algo" / "pyx"
+    cyml_rep.mkdir(parents=True, exist_ok=True)
     return crop2ml_rep, cyml_rep    
                 
 
@@ -241,7 +234,7 @@ def translate_(f, pa):
     not_declared = list(set(lr.not_declared) - set(args))
     for n in not_declared:
         for m in pa:
-            if m["Name"].decode("utf-8") == n:
+            if m["Name"] == n:
                 r = Node(type=type_[m['ValueType']], name=n, pseudo_type=pseudo_type_[m['ValueType']])
                 res.append(r)
                 r.type = "local"
@@ -261,6 +254,8 @@ def run_bioma(component, output):
     pkg = os.path.split(component)[-1].replace('-', '_')
     
     files = repowalk.walk(component, "cs" )
+    # Exclude files from 'obj' directories (build artifacts)
+    files = {k: v for k, v in files.items() if '/obj/' not in v and '\\obj\\' not in v}
     res = {}
     stra = {}
     straNames = []
@@ -270,10 +265,10 @@ def run_bioma(component, output):
     compo = {}
     source_codes=[]
     for  k, v in files.items():
-        with open(v, 'r') as f:
+        with open(v, 'r', encoding="utf-8-sig") as f:
             code = f.read()
         if code : # and k=="WheatLAIState.cs":
-            if code.startswith("ï»¿"): code = code[3:]
+            #if code.startswith("ï»¿"): code = code[3:]
             splitcode = code.split('\n')
             zz = map(lambda x: x.lstrip(), splitcode)
             codelist = [n  for n in zz if not n.startswith("#") ]
@@ -324,7 +319,7 @@ def run_bioma(component, output):
         funcs = [f for f in funcs if f]
         strat_var = z.getStrategyVar(st)
         pa = strat_var[0]
-        dict_pa = {f["Name"].decode("utf-8"):f for f in pa}
+        dict_pa = {f["Name"]:f for f in pa}
         all_var_pa = {**dict_pa, **all_var}   # all the variable from all varinfo files and parameters of the specific strategy.
         params_not_declared = {}
         params_not_declared_ = {}
@@ -374,7 +369,7 @@ def run_bioma(component, output):
                         not_declared = list(set(lr.not_declared) - set(args))
                         for n in not_declared:
                             for m in pa:
-                                if m["Name"].decode("utf-8") == n:
+                                if m["Name"] == n:
                                     tt = Node(type=type_[m['ValueType']], name=n, pseudo_type=pseudo_type_[m['ValueType']])
                                     res.append(tt)
                                     tt.type = "local"
@@ -430,17 +425,15 @@ def run_bioma(component, output):
                 h = cd.transform()
                 nd = transform_to_syntax_tree(h)
                 code = writeCyml(nd) 
-                filename = Path(os.path.join(cyml_rep, "%s.pyx"%(name)))
-                with open(filename, "wb") as tg_file:
+                filename = cyml_rep / f"{name}.pyx"
+                with filename.open("wb") as tg_file:
                     tg_file.write(code.encode('utf-8'))
                     
         rr, vv = translate(total_tree, z.dclassdict, algo.block, params_not_declared_, res_inout, member_category, dict_pa)
         env = {m.name:m.pseudo_type for j in rr.declarations for m in j.decl}
         zz = CheckingInOut( {},isAlgo = True)
         r_ch = zz.process(vv)
-        print(zz.inputs, zz.outputs)
-        z.modelunit(description, var_, all_var_pa,var,  list(set(zz.inputs)), list(set(zz.outputs)))
-        print(z.model.name) 
+        z.modelunit(description, var_, all_var_pa,var,  list(set(zz.inputs)), list(set(zz.outputs))) 
 
         startcom = description_tags[0] # start of description extraction
         startend = description_tags[1] # end of description extraction
@@ -451,7 +444,6 @@ def run_bioma(component, output):
             mdata = extract(commentsPart[0]+"\n\n")
             z.model = mdata
         
-        #print(z.model.outputs)
         z.model.function = [n.name for n in funcs if f]
         if init_:
             rr_, init_pseudo = translate(total_tree, z.dclassdict, init_.block, params_not_declared_, res_inout, member_category, dict_pa)
@@ -464,8 +456,8 @@ def run_bioma(component, output):
             h = cd.transform()
             nd = transform_to_syntax_tree(h)
             initcode = writeCyml(nd)
-            filename = Path(os.path.join(cyml_rep, "init.%s.pyx"%(z.model.name)))
-            with open(filename, "wb") as tg_file:
+            filename = cyml_rep / f"init.{z.model.name}.pyx"
+            with filename.open("wb") as tg_file:
                 tg_file.write(initcode.encode('utf-8'))   
                
         models.append(z.model)
@@ -475,13 +467,13 @@ def run_bioma(component, output):
         nd = transform_to_syntax_tree(h)
         code = writeCyml(nd)
          
-        filename = Path(os.path.join(cyml_rep, "%s.pyx"%(straNames[k])))
-        with open(filename, "wb") as tg_file:
+        filename = cyml_rep / f"{straNames[k]}.pyx"
+        with filename.open("wb") as tg_file:
             tg_file.write(code.encode('utf-8'))
         
         xml_ = Pl2Crop2ml(z.model, "Crop2ML."+pkg).run_unit() 
-        filename = Path(os.path.join(crop2ml_rep, "unit.%s.xml"%(straNames[k])))
-        with open(filename, "wb") as xml_file:
+        filename = crop2ml_rep / f"unit.{straNames[k]}.xml"
+        with filename.open("wb") as xml_file:
             #xml_file.write(xml_.unicode(indent=4).encode('utf-8'))
             r = '<?xml version="1.0" encoding="UTF-8"?>\n'
             r += '<!DOCTYPE ModelUnit PUBLIC " " "https://raw.githubusercontent.com/AgriculturalModelExchangeInitiative/crop2ml/master/ModelUnit.dtd">\n'
@@ -492,8 +484,8 @@ def run_bioma(component, output):
         z.modelcomposition(models,compo)
         xml_ = Pl2Crop2ml(z.mc, "Crop2ML."+pkg).run_compo()
         name = z.mc.name[:-9] if z.mc.name.endswith("Component") else z.mc.name
-        filename = Path(os.path.join(crop2ml_rep, "composition.%s.xml"%(name)))
-        with open(filename, "wb") as xml_file:
+        filename = crop2ml_rep / f"composition.{name}.xml"
+        with filename.open("wb") as xml_file:
             #xml_file.write(xml_.unicode(indent=4).encode('utf-8'))
             r = '<?xml version="1.0" encoding="UTF-8"?>\n'
             r += '<!DOCTYPE ModelComposition PUBLIC " " "https://raw.githubusercontent.com/AgriculturalModelExchangeInitiative/crop2ml/master/ModelComposition.dtd">\n'
@@ -508,4 +500,3 @@ def run_bioma(component, output):
                 
             
                 
-

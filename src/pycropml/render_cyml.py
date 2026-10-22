@@ -1,17 +1,12 @@
 """Add License, Header.
-Use pkglts
-Problems:
-- name of a model unit?
+
 """
 from __future__ import print_function
 from __future__ import absolute_import
-import os.path
-from os.path import isdir
+
 import sys
-from path import Path
-import six
-import shutil
-from datetime import datetime
+from pathlib import Path
+
 from pycropml.modelunit import ModelUnit
 from . import error
 from . import split_function
@@ -30,7 +25,7 @@ DATATYPE['DOUBLEARRAY'] = "float"
 DATATYPE['INTARRAY'] = "int"
 DATATYPE['BOOLEAN'] = "bool"
 DATATYPE['DATE'] = "datetime"
-class Model2Package(object):
+class Model2Package:
     """ TODO
     """
 
@@ -46,8 +41,8 @@ class Model2Package(object):
             self.pkg_name = "CropModel"
         else:
             self.pkg_name = pkg_name
-        self.cwd = Path(self.dir)
-        self.rep = os.path.abspath(os.path.dirname(self.cwd))
+        self.cwd = Path(self.dir).resolve()
+        self.rep = self.cwd.parent.parent
 
     def run(self):
         """TODO."""
@@ -65,35 +60,30 @@ class Model2Package(object):
 
         # Create a directory (mymodel)
         
-        directory = Path(os.path.join(self.cwd, 'pyx'))
-        if isdir(directory):
-            self.dir = directory
-        else:
-            self.dir = directory.mkdir()
+        directory = self.cwd / 'pyx'
+        directory.mkdir(parents=True, exist_ok=True)
+        self.dir = directory
 
         files = []
     
         count = 0
         for model in self.models:          
             self.generate_component(model) 
-            filename = Path(os.path.join(self.dir, f"{signature(model).capitalize()}.pyx"))
-            with open(filename, "wb") as cyml_file:
+            filename = self.dir / f"{signature(model).capitalize()}.pyx"
+            with filename.open("wb") as cyml_file:
                 # cyml_file.write(self.code.encode('utf-8','ignore'))
                 cyml_file.write(self.code.encode('utf-8'))
                 files.append(filename)          
-                model.module_name = str(Path(filename).name)
+                model.module_name = filename.name
             count += 1
         return files
         
     def generate_component(self, model_unit):
         """Todo"""
-
-        functions = []
         if model_unit.modelid.split(".")[0] != "function":
             func_name = f"model_{signature(model_unit)}"
         else:
             func_name = signature(model_unit)
-        
         types = [inp.datatype for inp in model_unit.inputs] + [out.datatype for out in model_unit.outputs]
         self.code = "import numpy\n"
         self.code += "from math import *\n"
@@ -105,17 +95,22 @@ class Model2Package(object):
             
         self.code += self.generate_function_signature(func_name, model_unit.inputs) + "\n"
         self.code += self.generate_function_doc(model_unit) + "\n"
-        self.code += self.generate_algorithm(model_unit) + "\n"
+        if sys.version_info[0] >= 3:
+            self.code += self.generate_algorithm(model_unit) + "\n"
+        else:
+            self.code += self.generate_algorithm(model_unit).decode("utf-8") + "\n"
 
-        if model_unit.function: 
-            function_files = [Path(os.path.join(model_unit.path, "crop2ml", function.filename))
-                              for function in model_unit.function if function.language.lower() == "cyml"]
+        if model_unit.function:
+            for function in model_unit.function:
+                if function.language in ("Cyml", "cyml"):
+                    filefunc = Path(model_unit.path) / "crop2ml" / function.filename
+                    with filefunc.open('r') as f:
+                        source = f.read()
+                        self.code += source 
+                        self.code += "\n\n\n"
 
-            content = split_function.unique_functions(function_files)
-            self.code += content
-            self.code += "\n"
-     
         return self.code
+
 
     def generate_algorithm(self, model_unit):
         outputs = model_unit.outputs
@@ -176,7 +171,7 @@ class Model2Package(object):
         code = ""
         if model_unit.initialization:
             file_init = model_unit.initialization[0].filename
-            path_init = Path(os.path.join(model_unit.path, "crop2ml", file_init))
+            path_init = Path(model_unit.path) / "crop2ml" / str(file_init)
             par = []
             for inp in inputs:
                 if "parametercategory" in dir(inp):
@@ -184,7 +179,7 @@ class Model2Package(object):
                 elif inp.variablecategory == "exogenous":
                     par.append(inp)
                         
-            with open(path_init, 'r') as f:
+            with path_init.open('r') as f:
                 code_init = f.read() 
             if code_init is not None:
                 lines = [tab+l for l in code_init.split('\n') if l.split()]
@@ -263,12 +258,12 @@ class Model2Package(object):
                     run_param = params.copy()
                     run_param.update(ins)
 
-                    for k, v in six.iteritems(run_param):
+                    for k, v in run_param.items():
                         code = f"    {k} = {v},"
                         test_codes.append(code)
                     code = "     )"
                     test_codes.append(code)
-                    outnames = list(outs.keys())
+                    outnames = list(outs)
                     for j, k in enumerate(m.outputs):
                         if k.name in outnames:
                             if k.datatype.strip() in ("STRINGLIST", "DATELIST", "STRINGARRAY", "DATEARRAY"):
@@ -339,14 +334,14 @@ class Model2Package(object):
         """
         TODO: Manage several models rather than just one.
         """
-        self.rep = Path(os.path.join(self.rep, 'test', 'pyx'))
-        if not isdir(self.rep):
-            self.rep.mkdir()
+        self.rep = Path(self.rep) / 'test' / 'pyx'
+        self.rep.mkdir(parents=True, exist_ok=True)
+
         files = []
         count = 0
         for model in self.models:
             codetest = self.generate_test(model)
-            filename = Path(os.path.join(self.rep, f"test_{signature(model).capitalize()}.pyx"))
+            filename = self.rep / f"test_{signature(model).capitalize()}.pyx"
             codetest = f"""\
 #'Test generation'
 
@@ -355,7 +350,7 @@ from math import *
 import numpy
  
  {codetest}"""
-            with open(filename, "wb") as cyml_file:
+            with filename.open("wb") as cyml_file:
                 cyml_file.write(codetest.encode('utf-8'))
                 files.append(filename)
             count += 1
@@ -475,6 +470,7 @@ def default_value(inp):
     elif type_.endswith("ARRAY") and inp.len:
         if type_=="INTARRAY": return f"array('i', [0]*{inp.len})"
         if type_=="DOUBLEARRAY": return f"array('f', [0.0]*{inp.len})"
+    elif type_ == "STRING": return "\'\'"
 
 DATATYPE2 = {}
 DATATYPE2['INT'] = "int"
