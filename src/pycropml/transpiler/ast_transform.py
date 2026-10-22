@@ -613,7 +613,8 @@ class AstTransformer:
             """
             # return self._translate_slice(receiver=value_node, upper=slice.upper, step=slice.step, lower=slice.lower, location=location)
 
-    def visit_cenumdefnode(self, node, items, location):
+    # Cython 3 added CEnumDefNode.underlying_type; not needed here
+    def visit_cenumdefnode(self, node, items, location, underlying_type=None):
         z = []
         v = 0
         for it in items:
@@ -1201,7 +1202,9 @@ class AstTransformer:
                 "function": function,
             }
 
-    def visit_condexprnode(self, node, test, true_val, false_val, location):
+    # Cython 3 renamed CondExprNode.test to condition
+    def visit_condexprnode(self, node, true_val, false_val, location, test=None, condition=None):
+        test = condition if test is None else test
         val1 = self.visit_node(true_val)
         val2 = self.visit_node(false_val)
         a = self._compatible_types(
