@@ -208,19 +208,8 @@ Crop2ML package.
   unset fields (`iTempMax`, `iRadiation` in Simplace's SnowCoverCalculator). Odin: handled in
   `OdinCompo.renamed_input_links`. The real fix belongs in `algo2cyml`. Tell: PyCrop2ML.
 
-* **B12 Units run in XML order, not dependency order.** Upstream commit 29d0e35 (2026-06-26)
-  changed `topology.py` `algorithm()` (lines 260–262) from `topologicalSort()` over the
-  internal links to the order of the `<Model>` elements in the composition XML
-  (`W = [mod.name for mod in self.model.model]`). A composition that lists a consumer before
-  its producer now silently uses the previous step's value. Example: `Monica_SoilTemp` lists
-  `SoilTemperature` first, so the profile is computed from yesterday's surface temperature.
-  Affects every target. The numeric test can't catch it (Python and Odin share the order).
-  Was the change intended? If yes, `cyml` should at least warn when the XML order contradicts
-  the internal links. Tell: PyCrop2ML.
-* **B13 (fixed upstream) Composition init returned undeclared states.** Pre-merge, the
-  composition's init returned every state but only declared those a unit init produces, so a
-  state no unit initialises failed with "… is not defined" (the reason for monica_amei commit
-  d72da22). The merged upstream code declares all states (`val_init2`).
+B12 and B13 also belong here; see "Shared front end, continued" at the end of this list.
+
 
 ### cpp2 target
 
@@ -274,6 +263,26 @@ Crop2ML package.
   `algo/pyx/stomata_resistance.pyx` line 5: `stomata_resistance` is only assigned inside
   `if carboxylation_pathway > 0:`; `carboxylation_pathway` has `default="0"`
   (`unit.stomata_resistance.xml`). Same consequences and fix as B10. Tell: model (MONICA).
+
+### Shared front end, continued (found later)
+
+These two belong with B1–B3 above: they are in the composition generator (`topology.py`)
+and affect every target. They are numbered at the end only because they were found after
+B4–B11.
+
+* **B12 Units run in XML order, not dependency order.** Upstream commit 29d0e35 (2026-06-26)
+  changed `topology.py` `algorithm()` (lines 260–262) from `topologicalSort()` over the
+  internal links to the order of the `<Model>` elements in the composition XML
+  (`W = [mod.name for mod in self.model.model]`). A composition that lists a consumer before
+  its producer now silently uses the previous step's value. Example: `Monica_SoilTemp` lists
+  `SoilTemperature` first, so the profile is computed from yesterday's surface temperature.
+  Affects every target. The numeric test can't catch it (Python and Odin share the order).
+  Was the change intended? If yes, `cyml` should at least warn when the XML order contradicts
+  the internal links. Tell: PyCrop2ML.
+* **B13 (fixed upstream) Composition init returned undeclared states.** Pre-merge, the
+  composition's init returned every state but only declared those a unit init produces, so a
+  state no unit initialises failed with "… is not defined" (the reason for monica_amei commit
+  d72da22). The merged upstream code declares all states (`val_init2`).
 
 ## 3. Out of scope (for now)
 
