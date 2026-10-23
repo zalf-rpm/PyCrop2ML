@@ -48,6 +48,17 @@ for day in days {
 * Odin has no implicit numeric conversion: an `int` operand of a floating-point
   operation is wrapped in `f64(...)`. Integer literals stay untyped constants.
 * `log(x)` → `math.ln(x)`, `log(x, base)` → `math.log(x, base)`.
+* Transcendental functions can go through MONICA's `support/cr_math` (CORE-MATH, correctly
+  rounded) instead of `core:math`: set `CYML_ODIN_MATH` to its import path *as seen from the
+  generated package*, e.g.
+
+  ```bash
+  CYML_ODIN_MATH=../../support/cr_math cyml -p Monica_SoilTemp odin
+  ```
+
+  `exp`, `log`/`ln`, `pow`, `sin`, `cos`, `tan`, `asin`, `acos` and `atan` then use `cr_math`
+  (`log(x, base)` becomes `cr_math.log(x) / cr_math.log(base)`); `sqrt`, `floor`, `ceil`,
+  `round`, `is_nan`, `sum` and `PI` stay `core:math`. Executables then link `cr_math_lib`.
 * Helper functions of a ModelUnit are `@(private="file")`, so equal names in
   different ModelUnits don't collide. They take arrays as slices and return lists
   and arrays as slices.
@@ -59,7 +70,9 @@ for day in days {
 * Local arrays in procs are freed with `defer delete(...)` unless they are
   returned. A caller copies list/array results of a helper into its own arrays
   and frees the result if the helper allocated it.
-* All allocations use `context.allocator`.
+* Procs that may allocate (`make_*`, `*_init`, `*_calculate_model`, the Component's list/array
+  setters) take `allocator := context.allocator` as their last parameter and make it the
+  context allocator for everything they call, so a host can pass e.g. an arena.
 
 ## Checking the output
 

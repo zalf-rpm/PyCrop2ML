@@ -103,6 +103,31 @@ def test_log_with_a_base_keeps_the_base():
     assert expr(node) == "math.log(x, f64(10))"
 
 
+def test_cr_math_is_used_for_transcendental_functions(monkeypatch):
+    monkeypatch.setenv("CYML_ODIN_MATH", "../../support/cr_math")
+    generator = OdinGenerator(None)
+    call = Node("standard_call", namespace="math", function="exp", args=[local("x", "float")],
+                pseudo_type="float")
+    assert generator.expr(call) == "cr_math.exp(x)"
+    assert generator.imports == {'cr_math "../../support/cr_math"'}
+
+
+def test_cr_math_log_with_a_base_divides_natural_logarithms(monkeypatch):
+    monkeypatch.setenv("CYML_ODIN_MATH", "../../support/cr_math")
+    node = Node("standard_call", namespace="math", function="log",
+                args=[local("x", "float"), Node("int", value="10", pseudo_type="int")], pseudo_type="float")
+    assert expr(node) == "(cr_math.log(x) / cr_math.log(f64(10)))"
+
+
+def test_functions_cr_math_lacks_stay_core_math(monkeypatch):
+    monkeypatch.setenv("CYML_ODIN_MATH", "../../support/cr_math")
+    generator = OdinGenerator(None)
+    call = Node("standard_call", namespace="math", function="sqrt", args=[local("x", "float")],
+                pseudo_type="float")
+    assert generator.expr(call) == "math.sqrt(x)"
+    assert generator.imports == {'"core:math"'}
+
+
 def test_assignment_converts_int_to_float_target():
     generator = OdinGenerator(None)
     generator.visit_assignment(Node("assignment", target=local("x", "float"), value=local("i", "int")))
@@ -148,8 +173,17 @@ def test_component_drives_the_model_units(generated):
 
 def test_model_unit_has_constructor_with_defaults(generated):
     code = (generated / "NoSnowSoilSurfaceTemperature.odin").read_text(encoding="utf-8")
-    assert "make_no_snow_soil_surface_temperature :: proc() -> (m: No_Snow_Soil_Surface_Temperature) {" in code
+    assert ("make_no_snow_soil_surface_temperature :: proc(allocator := context.allocator) "
+            "-> (m: No_Snow_Soil_Surface_Temperature) {") in code
     assert "\tm.damping_factor = 0.8\n" in code
+
+
+def test_allocating_procs_take_an_allocator(generated):
+    code = (generated / "SoilTemperature.odin").read_text(encoding="utf-8")
+    for proc in ("soil_temperature_init", "soil_temperature_calculate_model"):
+        header = next(line for line in code.splitlines() if line.startswith(f"{proc} :: proc("))
+        assert header.endswith(", allocator := context.allocator) {"), header
+    assert code.count("\tcontext.allocator = allocator\n") == 3  # make_, init, calculate_model
 
 
 def odin_compiler():

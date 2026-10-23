@@ -12,6 +12,7 @@ so that ``int`` operands can be wrapped in ``f64(...)`` where Odin requires an
 explicit conversion, and parentheses follow Odin's operator precedence.
 """
 import ast
+import os
 from pathlib import Path
 
 from pycropml.nameconvention import signature2
@@ -24,6 +25,7 @@ from pycropml.transpiler.rules.odinRules import (
 )
 
 CATEGORIES = ("State", "Rate", "Auxiliary", "Exogenous")
+CR_MATH_ENV = "CYML_ODIN_MATH"
 STRUCT_VARS = ("m", "s", "s1", "r", "a", "ex")
 
 
@@ -98,6 +100,8 @@ class OdinGenerator(CodeGenerator, OdinRules):
         self.model = model
         self.name = name
         self.imports = set()
+        # import path of MONICA's support/cr_math, as seen from the generated package
+        self.cr_math = os.environ.get(CR_MATH_ENV) or None
         self.funcname = ""
         self.in_model_proc = False
         self.local_types = {}
@@ -287,11 +291,11 @@ class OdinGenerator(CodeGenerator, OdinRules):
         return "nil", self.odin_atom_precedence
 
     def expr_notAnumber(self, node):
-        self.imports.add("core:math")
+        self.imports.add('"core:math"')
         return "math.nan_f64()", self.odin_atom_precedence
 
     def expr_constant(self, node):
-        self.imports.add("core:math")
+        self.imports.add('"core:math"')
         return self.constants[node.library][node.name], self.odin_atom_precedence
 
     def expr_datetime(self, node):
@@ -370,18 +374,27 @@ class OdinGenerator(CodeGenerator, OdinRules):
         return f"{self.paren(node, self.odin_atom_precedence)}[:]"
 
     def contains(self, seq, item):
-        self.imports.add("core:slice")
+        self.imports.add('"core:slice"')
         return f"slice.contains({self.slice_of(seq)}, {self.expr(item)})"
 
     def math_call(self, fn, args):
-        """core:math procs are proc groups: every argument must be typed f64."""
-        self.imports.add("core:math")
+        """Call ``math.<name>``; transcendental functions go through cr_math if configured.
+
+        core:math procs are proc groups: every argument must be typed f64.
+        """
         rendered = []
         for a in args:
             code = self.expr(a, "float")
             if is_constant(a):
                 code = f"f64({code})"
             rendered.append(code)
+        name = fn.split(".", 1)[1]
+        if self.cr_math and name in self.cr_math_functions:
+            self.imports.add(f'cr_math "{self.cr_math}"')
+            if name == "log":  # log(x, base); cr_math.log is the natural logarithm
+                return f"(cr_math.log({rendered[0]}) / cr_math.log({rendered[1]}))"
+            return f"cr_math.{self.cr_math_functions[name]}({', '.join(rendered)})"
+        self.imports.add('"core:math"')
         return f"{fn}({', '.join(rendered)})"
 
     def expr_standard_call(self, node):
@@ -399,7 +412,7 @@ class OdinGenerator(CodeGenerator, OdinRules):
                 return code, self.odin_atom_precedence
         elif fn in ("min", "max"):
             if len(args) == 1:
-                self.imports.add("core:slice")
+                self.imports.add('"core:slice"')
                 return f"slice.{fn}({self.slice_of(args[0])})", self.odin_atom_precedence
             want = result_type if result_type in ("int", "float") else None
             return f"{fn}({', '.join(self.expr(a, want) for a in args)})", self.odin_atom_precedence
@@ -435,7 +448,7 @@ class OdinGenerator(CodeGenerator, OdinRules):
             if msg == "extend":
                 return f"append(&{r}, ..{self.slice_of(args[0])})", self.odin_atom_precedence
             if msg == "sum":
-                self.imports.add("core:math")
+                self.imports.add('"core:math"')
                 return f"math.sum({self.slice_of(recv)})", self.odin_atom_precedence
             if msg == "pop":
                 if args:
@@ -456,7 +469,7 @@ class OdinGenerator(CodeGenerator, OdinRules):
             if msg == "contains?":
                 return f"{self.expr(args[0])} in {r}", self.odin_binop_precedence["=="]
         if kind == "str" and msg == "find":
-            self.imports.add("core:strings")
+            self.imports.add('"core:strings"')
             return f"strings.index({self.expr(recv)}, {self.expr(args[0])})", self.odin_atom_precedence
         raise NotImplementedError(f"Odin: no rule for method {kind}.{msg}")
 
@@ -771,7 +784,7 @@ class OdinGenerator(CodeGenerator, OdinRules):
         rep = self.repeat_parts(value)
         if rep is not None:
             fill, count = rep
-            self.imports.add("core:slice")
+            self.imports.add('"core:slice"')
             self.line(f"resize(&{t}, {self.expr(count, 'int')})")
             self.line(f"slice.fill({t}[:], {self.expr(fill, elem)})")
         elif value.type in ("list", "array") and not as_list(getattr(value, "elements", None)) \
@@ -908,7 +921,10 @@ class OdinGenerator(CodeGenerator, OdinRules):
                 for doc in (self.doc.inputs_doc, self.doc.outputs_doc):
                     for doc_line in doc.split("\n"):
                         self.line(doc_line.rstrip())
-            self.line(f"{to_snake(self.model.name)}_{proc} :: proc({self.model_proc_signature()}) {{")
+            self.line(f"{to_snake(self.model.name)}_{proc} :: proc({self.model_proc_signature()}, allocator := context.allocator) {{")
+            self.indentation += 1
+            self.line("context.allocator = allocator")
+            self.indentation -= 1
         else:
             for p in params:
                 self.local_types[p.name] = ptype(p)
@@ -922,7 +938,7 @@ class OdinGenerator(CodeGenerator, OdinRules):
             for p in params:
                 pname = to_snake(p.name)
                 if p.name in copied:
-                    self.imports.add("core:slice")
+                    self.imports.add('"core:slice"')
                     source = pname if ptype(p)[0] == "array" else f"{pname}[:]"
                     self.line(f"{pname} := slice.clone_to_dynamic({source})")
                     if p.name not in self.returned:
@@ -979,8 +995,9 @@ class OdinGenerator(CodeGenerator, OdinRules):
         self.indentation -= 1
         self.line("}")
         self.newline(extra=1)
-        self.line(f"make_{snake} :: proc() -> (m: {model_type}) {{")
+        self.line(f"make_{snake} :: proc(allocator := context.allocator) -> (m: {model_type}) {{")
         self.indentation += 1
+        self.line("context.allocator = allocator")
         for p in self.node_param:
             value = self.default_value(p)
             if value is None:
@@ -1008,7 +1025,7 @@ class OdinGenerator(CodeGenerator, OdinRules):
         pkg = package_name(Path(self.model.path).name) if self.model is not None else "main"
         text = f"package {pkg}\n"
         if self.imports:
-            text += "\n" + "".join(f'import "{imp}"\n' for imp in sorted(self.imports))
+            text += "\n" + "".join(f"import {imp}\n" for imp in sorted(self.imports))
         return text
 
     def visit_module(self, node):
@@ -1129,8 +1146,9 @@ class OdinCompo(OdinGenerator):
         self.indentation -= 1
         self.line("}")
         self.newline(extra=1)
-        self.line(f"make_{self.prefix} :: proc() -> (c: {self.component_type}) {{")
+        self.line(f"make_{self.prefix} :: proc(allocator := context.allocator) -> (c: {self.component_type}) {{")
         self.indentation += 1
+        self.line("context.allocator = allocator")
         for m in self.modelt.model:
             self.line(f"c.{to_snake(m.name)} = make_{to_snake(m.name)}()")
         self.line("return")
@@ -1146,9 +1164,12 @@ class OdinCompo(OdinGenerator):
         for p, targets in self.composite_inputs():
             t = ptype(p.pseudo_type)
             self.newline(extra=1)
+            alloc = ", allocator := context.allocator" if is_sequence_type(t) else ""
             self.line(f"{self.prefix}_set_{to_snake(p.name)} :: proc(c: ^{self.component_type}, "
-                      f"value: {self.type_str(t, param=True)}) {{")
+                      f"value: {self.type_str(t, param=True)}{alloc}) {{")
             self.indentation += 1
+            if alloc:
+                self.line("context.allocator = allocator")
             for unit, var in targets:
                 field = f"c.{self.unit_field(unit)}.{to_snake(var)}"
                 if is_sequence_type(t):
@@ -1170,7 +1191,7 @@ class OdinCompo(OdinGenerator):
         pkg = package_name(Path(self.modelt.path).name)
         text = f"package {pkg}\n"
         if self.imports:
-            text += "\n" + "".join(f'import "{imp}"\n' for imp in sorted(self.imports))
+            text += "\n" + "".join(f"import {imp}\n" for imp in sorted(self.imports))
         self.result = [text, "\n", body]
 
     def visit_function_definition(self, node):
@@ -1185,11 +1206,12 @@ class OdinCompo(OdinGenerator):
         self.pick_struct_vars([p.name for p in params] + self.declared_names(node.block), model_var="c")
         proc = "init" if is_init else "calculate_model"
         self.newline(extra=1)
-        self.line(f"{self.prefix}_{proc} :: proc({self.model_proc_signature()}) {{")
+        self.line(f"{self.prefix}_{proc} :: proc({self.model_proc_signature()}, allocator := context.allocator) {{")
+        self.indentation += 1
+        self.line("context.allocator = allocator")
         if is_init:
-            self.indentation += 1
             self.renamed_input_links()
-            self.indentation -= 1
+        self.indentation -= 1
         self.block(node.block)
         self.line("}")
         self.in_model_proc = False

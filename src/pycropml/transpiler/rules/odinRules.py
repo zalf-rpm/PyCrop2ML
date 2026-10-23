@@ -18,7 +18,7 @@ RESERVED = {
     "resize", "reserve", "clear", "copy", "inject_at", "ordered_remove",
     "unordered_remove", "pop", "assert", "panic", "string", "int", "bool",
     "f32", "f64", "rune", "byte", "any", "rawptr", "uint",
-    "math", "slice", "strings", "strconv", "fmt",
+    "math", "slice", "strings", "strconv", "fmt", "cr_math", "allocator",
 }
 
 
@@ -119,6 +119,21 @@ class OdinRules(GeneralRule):
         "ceil": "math.ceil",
         "round": "math.round",
         "isnan": "math.is_nan",
+    }
+
+    # core:math name -> cr_math name (CORE-MATH, correctly rounded; MONICA's CONVENTIONS.md
+    # requires it for transcendental functions). log is the two-argument form.
+    cr_math_functions = {
+        "exp": "exp",
+        "ln": "log",
+        "log": "log",
+        "pow": "pow",
+        "sin": "sin",
+        "cos": "cos",
+        "tan": "tan",
+        "asin": "asin",
+        "acos": "acos",
+        "atan": "atan",
     }
 
     constants = {
