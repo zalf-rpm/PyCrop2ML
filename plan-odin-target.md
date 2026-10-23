@@ -278,7 +278,10 @@ B4–B11.
   `SoilTemperature` first, so the profile is computed from yesterday's surface temperature.
   Affects every target. The numeric test can't catch it (Python and Odin share the order).
   Was the change intended? If yes, `cyml` should at least warn when the XML order contradicts
-  the internal links. Tell: PyCrop2ML.
+  the internal links. **Status (2026-10-23):** reported to the upstream developer, who is
+  checking whether it was intentional; still open. Workaround in monica_amei: the
+  `<Model>` elements of `Monica_SoilTemp` are reordered to NoSnow → WithSnow → SoilTemperature
+  (SoilTemperatureModels commit 1c5cde3), which gives the old order with either version.
 * **B13 (fixed upstream) Composition init returned undeclared states.** Pre-merge, the
   composition's init returned every state but only declared those a unit init produces, so a
   state no unit initialises failed with "… is not defined" (the reason for monica_amei commit
