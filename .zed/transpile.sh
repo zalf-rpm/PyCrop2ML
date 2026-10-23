@@ -6,9 +6,18 @@ root=${1:?usage: transpile.sh <PyCrop2ML root>}
 # discard input that arrived before the prompt (e.g. the Enter that started the task)
 while read -r -t 0.3 _; do :; done
 
+# true if $1 is a Crop2ML package (plain glob: compgen is missing in non-interactive bash builds)
+is_package() {
+    local f
+    for f in "$1"/crop2ml/composition*.xml; do
+        [ -n "$1" ] && [ -e "$f" ] && return 0
+    done
+    return 1
+}
+
 available=$(ls -d */crop2ml 2>/dev/null | cut -d/ -f1 | tr '\n' ' ')
 read -r -p 'Package: ' pkg
-while ! compgen -G "$pkg/crop2ml/composition*.xml" > /dev/null; do
+while ! is_package "$pkg"; do
     echo "No Crop2ML package: '$pkg'. Available: $available"
     read -r -p 'Package: ' pkg
 done
