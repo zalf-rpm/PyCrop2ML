@@ -270,18 +270,16 @@ These two belong with B1–B3 above: they are in the composition generator (`top
 and affect every target. They are numbered at the end only because they were found after
 B4–B11.
 
-* **B12 Units run in XML order, not dependency order.** Upstream commit 29d0e35 (2026-06-26)
-  changed `topology.py` `algorithm()` (lines 260–262) from `topologicalSort()` over the
-  internal links to the order of the `<Model>` elements in the composition XML
-  (`W = [mod.name for mod in self.model.model]`). A composition that lists a consumer before
-  its producer now silently uses the previous step's value. Example: `Monica_SoilTemp` lists
-  `SoilTemperature` first, so the profile is computed from yesterday's surface temperature.
-  Affects every target. The numeric test can't catch it (Python and Odin share the order).
-  Was the change intended? If yes, `cyml` should at least warn when the XML order contradicts
-  the internal links. **Status (2026-10-23):** reported to the upstream developer, who is
-  checking whether it was intentional; still open. Workaround in monica_amei: the
-  `<Model>` elements of `Monica_SoilTemp` are reordered to NoSnow → WithSnow → SoilTemperature
-  (SoilTemperatureModels commit 1c5cde3), which gives the old order with either version.
+* **B12 (fixed upstream) Units ran in XML order, not dependency order.** Upstream commit
+  29d0e35 (2026-06-26) had changed `topology.py` `algorithm()` from `topologicalSort()` over the
+  internal links to the order of the `<Model>` elements in the composition XML, so a composition
+  listing a consumer before its producer silently used the previous step's value (e.g.
+  `Monica_SoilTemp`: the profile from yesterday's surface temperature). Reported; fixed in
+  upstream commit 4683b96 (2026-10-23, merged 2026-10-26): `topologicalSort()` again orders by
+  the internal links, keeps the XML order wherever the links allow it, and warns when it
+  reorders units or finds a cycle. Checked: the example's `Monica_SoilTemp` (XML order
+  SoilTemperature first) is reordered to NoSnow → WithSnow → SoilTemperature with a warning. The
+  reordering in monica_amei (SoilTemperatureModels 1c5cde3) is no longer needed, but harmless.
 * **B13 (fixed upstream) Composition init returned undeclared states.** Pre-merge, the
   composition's init returned every state but only declared those a unit init produces, so a
   state no unit initialises failed with "… is not defined" (the reason for monica_amei commit
