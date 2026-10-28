@@ -991,7 +991,7 @@ class OdinGenerator(CodeGenerator, OdinRules):
         self.line(f"{model_type} :: struct {{")
         self.indentation += 1
         for p in self.node_param:
-            self.line(f"{to_snake(p.name)}: {self.type_str(p.pseudo_type)},{field_comment(p)}")
+            self.line(f"{to_snake(p.name)}: {self.type_str(p.pseudo_type)}{unit_tag(p)},{field_comment(p)}")
         self.indentation -= 1
         self.line("}")
         self.newline(extra=1)
@@ -1046,9 +1046,22 @@ class OdinGenerator(CodeGenerator, OdinRules):
 
 def field_comment(var):
     desc = str(getattr(var, "desc", "") or "").strip().replace("\n", " ")
-    unit = str(getattr(var, "unit", "") or "").strip()
-    text = desc + (f" [{unit}]" if unit else "")
-    return f" // {text}" if text else ""
+    return f" // {desc}" if desc else ""
+
+
+def unit_tag(var):
+    """The variable's unit as a struct tag, `unit:"..."`, as the package declares it.
+
+    A tag rather than a comment so that it can be read at run time
+    (core:reflect's struct_tag_lookup), e.g. to label outputs. No tag if the
+    variable declares no unit at all.
+    """
+    unit = getattr(var, "unit", None)
+    if unit is None:
+        return ""
+    # a tag is a raw string in backticks with a quoted value
+    unit = " ".join(str(unit).split()).replace("\\", "/").replace('"', "'").replace("`", "'")
+    return f' `unit:"{unit}"`'
 
 
 def to_struct_odin(models, rep, name):
@@ -1068,7 +1081,7 @@ def to_struct_odin(models, rep, name):
         gen.indentation += 1
         gen.check_names([v.name for v in nodes[category]], type_name)
         for v in nodes[category]:
-            gen.line(f"{to_snake(v.name)}: {gen.type_str(v.pseudo_type)},{field_comment(v)}")
+            gen.line(f"{to_snake(v.name)}: {gen.type_str(v.pseudo_type)}{unit_tag(v)},{field_comment(v)}")
         gen.indentation -= 1
         gen.line("}")
         gen.newline(extra=1)
