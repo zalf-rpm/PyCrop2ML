@@ -206,8 +206,9 @@ Crop2ML package.
   bitwise expressions and their compound operands always parenthesised (C/C++ rank
   comparisons above `&`/`^`/`|`, Python below). py: the operators as they are. Still missing:
   C#, Java, C++ (cpp), Fortran (`IOR`/`IAND`/`IEOR`/`ISHFT`), R (`bitwAnd`, ...) and the
-  platform targets; they fail with a `KeyError` on the operator. Tests:
-  `test/cyml/test_bitwise_operators.py`.
+  platform targets; they fail with a `KeyError` on the operator. No model uses the operators;
+  the only occurrence is upstream's synthetic `test/data/test_advanced_features.pyx` (6ef9fc9).
+  Tests: `test/cyml/test_bitwise_operators.py`.
 * **B3 Composition `init` ignores renamed InputLinks.** `topology.py`, `algo2cyml`: the model
   function gets `inps_assignment()` (line 335; e.g. `Albedo = cAlbedo`), the init function
   (lines 353–360, `val_init2` + `initialization2`) does not. `initialization2` (lines 391–411)
@@ -242,12 +243,14 @@ B12 and B13 also belong here; see "Shared front end, continued" at the end of th
   the first model that uses another base. Tell: PyCrop2ML, and mention it to the other model
   teams in case they have unpublished models using `log(x, base)`.
 
-* **B14 Returned locals of helper functions are not declared.** In a function that isn't a
-  `model_`/`init_` function, a local that is returned (feature `OUT`) gets no declaration:
-  `cdef int x; x = a + b; return x` becomes `x = a + b; return x;` without `int x;`.
-  `visit_declaration` skips `OUT`/`INOUT` variables, which is right in model functions
-  (they live in the structs) but not in helpers. The generated C++ doesn't compile. Odin: not
-  affected. Tell: PyCrop2ML.
+* **B14 (fixed 2026-11-17) Returned locals of helper functions are not declared.** In a
+  function that isn't a `model_`/`init_` function, a local that is returned (feature `OUT`)
+  got no declaration: `cdef int x; x = a + b; return x` became `x = a + b; return x;` without
+  `int x;`. `visit_declaration` skipped `OUT`/`INOUT` variables, which is right in model
+  functions (they live in the structs) but not in helpers, so the C++ didn't compile. Odin: not
+  affected. Fix: `cpp2Generator.py` `visit_declaration` skips them only in `model_`/`init_`
+  functions; the cpp2 output of all 21 example/AMEI packages is unchanged. Tests:
+  `test/cyml/test_cpp2_generator.py`. Tell: PyCrop2ML.
 
 ### Python target
 

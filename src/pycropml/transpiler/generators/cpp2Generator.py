@@ -1230,7 +1230,9 @@ class Cpp2Generator(CodeGenerator, CppRules):
             dn = dir(n)
             self.newline(node)
             if 'value' not in dn and not isinstance(n.pseudo_type, list) and n.pseudo_type != "datetime":
-                if "feat" not in dn or ("feat" in dn and n.feat not in ("OUT", "INOUT")):
+                # OUT/INOUT variables of model/init functions live in the structs; in helper
+                # functions they are ordinary (returned) locals and need a declaration
+                if "feat" not in dn or n.feat not in ("OUT", "INOUT") or not is_init_or_model_func:
                     self.write(self.types[n.pseudo_type])
                     self.write(f' {n.name};')
             elif 'elements' not in dn and n.type in ("list", "array"):
