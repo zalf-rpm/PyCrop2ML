@@ -262,6 +262,14 @@ class OdinGenerator(CodeGenerator, OdinRules):
         code, prec = self.expr_prec(node, want)
         return f"({code})" if prec < min_prec else code
 
+    def condition(self, node, min_prec=0):
+        """*node* where Odin needs a bool: a number is true if not 0, as in Python."""
+        if ptype(node) in ("int", "float"):
+            prec = self.odin_binop_precedence["!="]
+            code = f"{self.paren(node, prec + 1)} != 0"
+            return f"({code})" if prec < min_prec else code
+        return self.paren(node, min_prec)
+
     def expr_local(self, node):
         return self.var(node.name), self.odin_atom_precedence
 
@@ -321,6 +329,9 @@ class OdinGenerator(CodeGenerator, OdinRules):
         if op == "//":
             op = "/"
         prec = self.odin_binop_precedence[op]
+        if op in ("and", "or"):
+            left, right = self.condition(node.left, prec), self.condition(node.right, prec + 1)
+            return f"{left} {self.binary_op[op]} {right}", prec
         left = self.paren(node.left, prec, want)
         right = self.paren(node.right, prec + 1, want)
         return f"{left} {self.binary_op[op]} {right}", prec
@@ -329,13 +340,15 @@ class OdinGenerator(CodeGenerator, OdinRules):
 
     def expr_unary_op(self, node):
         op = str(node.operator)
+        if op == "not":
+            return f"!{self.condition(node.value, self.odin_unary_precedence + 1)}", self.odin_unary_precedence
         operand = self.paren(node.value, self.odin_unary_precedence + 1)
         return f"{self.unary_op[op]}{operand}", self.odin_unary_precedence
 
     def expr_cond_expr_node(self, node):
         want = ptype(node)
         want = want if want in ("int", "float") else None
-        test = self.paren(node.test, 1)
+        test = self.condition(node.test, 1)
         return f"{test} ? {self.paren(node.true_val, 1, want)} : {self.paren(node.false_val, 1, want)}", 0
 
     def expr_index(self, node):
@@ -460,6 +473,13 @@ class OdinGenerator(CodeGenerator, OdinRules):
                 return self.contains(recv, args[0]), self.odin_atom_precedence
             if msg == "not contains?":
                 return f"!{self.contains(recv, args[0])}", self.odin_unary_precedence
+            if msg == "index":
+                # Python's list.index raises if the value is missing; -1 (as
+                # C#'s IndexOf, Java's indexOf) makes the indexing that
+                # usually follows fail Odin's bounds check instead.
+                self.imports.add('"core:slice"')
+                return (f"(slice.linear_search({self.slice_of(recv)}, {self.expr(args[0], ptype(rt[1]))}) or_else -1)",
+                        self.odin_atom_precedence)
             if msg == "allocate":
                 return f"resize(&{r}, {self.expr(args[0], 'int')})", self.odin_atom_precedence
         if kind == "dict":
@@ -521,18 +541,18 @@ class OdinGenerator(CodeGenerator, OdinRules):
         self.line("continue")
 
     def visit_if_statement(self, node):
-        self.line(f"if {self.expr(node.test)} {{")
+        self.line(f"if {self.condition(node.test)} {{")
         self.block(node.block)
         for other in as_list(getattr(node, "otherwise", [])):
             if other.type == "elseif_statement":
-                self.line(f"}} else if {self.expr(other.test)} {{")
+                self.line(f"}} else if {self.condition(other.test)} {{")
             else:
                 self.line("} else {")
             self.block(other.block)
         self.line("}")
 
     def visit_while_statement(self, node):
-        self.line(f"for {self.expr(node.test)} {{")
+        self.line(f"for {self.condition(node.test)} {{")
         self.block(node.block)
         self.line("}")
 

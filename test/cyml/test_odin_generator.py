@@ -142,6 +142,26 @@ def test_assigning_none_to_a_list_clears_it():
     assert "".join(generator.result).strip() == "clear(&xs)"
 
 
+def test_list_index_is_a_linear_search():
+    generator = OdinGenerator(None)
+    call = Node("standard_method_call", receiver=local("calendarMoments_t1", ["list", "str"]),
+                message="index", args=[Node("str", value="Anthesis", pseudo_type="str")], pseudo_type="int")
+    assert generator.expr(call) == '(slice.linear_search(calendar_moments_t1[:], "Anthesis") or_else -1)'
+    assert generator.imports == {'"core:slice"'}
+
+
+def test_numbers_as_conditions_compare_with_zero():
+    generator = OdinGenerator(None)
+    generator.visit_if_statement(Node("if_statement", test=local("ignoreGrainMaturation", "int"),
+                                      block=[], otherwise=[]))
+    assert "".join(generator.result).strip().startswith("if ignore_grain_maturation != 0 {")
+    not_ = Node("unary_op", operator="not", value=local("n", "int"), pseudo_type="bool")
+    assert expr(not_) == "!(n != 0)"
+    and_ = binop("and", local("flag", "bool"), local("x", "float"), "bool")
+    assert expr(and_) == "flag && x != 0"
+    assert expr(Node("unary_op", operator="not", value=local("flag", "bool"), pseudo_type="bool")) == "!flag"
+
+
 @pytest.fixture(scope="module")
 def generated(tmp_path_factory):
     package = tmp_path_factory.mktemp("odin") / EXAMPLE.name

@@ -379,7 +379,7 @@ class OdinDriver:
             raise RuntimeError(f"Odin driver failed:\n{result.stdout[-3000:]}{result.stderr[-3000:]}")
         out = {}
         for line in result.stdout.strip().split("\n"):
-            step, name, value = line.split()
+            step, name, value = (line.split(" ", 2) + [""])[:3]  # a string value may be empty or contain spaces
             out[f"{step} {name}"] = value
         return out
 
