@@ -197,9 +197,17 @@ Crop2ML package.
   Before the fix, every package with a conditional expression (`a if c else b`) failed to
   transpile: ApsimCampbell, SQ_Soil_Temperature, Monica_Evapotranspiration. Works with Cython
   0.29 and 3.x. Tell: PyCrop2ML (part of the upstream contribution).
-* **B2 No `|` operator.** `ast_transform.py` has no `visit_bitwiseornode`;
-  `test/cyml/test_cyml_operations.py::TestCyMLDataFiles::test_advanced_features_file` fails.
-  Not fixed. Tell: PyCrop2ML.
+* **B2 (fixed 2026-11-17) Bitwise operators.** The front end failed on `|`: Cython creates a
+  `BitwiseOrNode` for it (`&`, `^`, `<<`, `>>` are `IntBinopNode`s) and `ast_transform.py` had
+  no `visit_bitwiseornode`; `^`, `<<`, `>>` had no type rule (`builtin_typed_api.py`), `~` no
+  handler (`visit_tildenode`), and no target mapped any of them. Now: the front end handles
+  all six (`|`, `&`, `^` on int or bool; shifts and `~` on int). Odin: `^` → `~`, Odin's
+  precedence (`&` and shifts with `*`, `|` and xor with `+`), shift counts as `uint(...)`. cpp2:
+  bitwise expressions and their compound operands always parenthesised (C/C++ rank
+  comparisons above `&`/`^`/`|`, Python below). py: the operators as they are. Still missing:
+  C#, Java, C++ (cpp), Fortran (`IOR`/`IAND`/`IEOR`/`ISHFT`), R (`bitwAnd`, ...) and the
+  platform targets; they fail with a `KeyError` on the operator. Tests:
+  `test/cyml/test_bitwise_operators.py`.
 * **B3 Composition `init` ignores renamed InputLinks.** `topology.py`, `algo2cyml`: the model
   function gets `inps_assignment()` (line 335; e.g. `Albedo = cAlbedo`), the init function
   (lines 353–360, `val_init2` + `initialization2`) does not. `initialization2` (lines 391–411)
@@ -233,6 +241,13 @@ B12 and B13 also belong here; see "Shared front end, continued" at the end of th
   be right by accident), so no current results are wrong; it's an inconsistency that bites
   the first model that uses another base. Tell: PyCrop2ML, and mention it to the other model
   teams in case they have unpublished models using `log(x, base)`.
+
+* **B14 Returned locals of helper functions are not declared.** In a function that isn't a
+  `model_`/`init_` function, a local that is returned (feature `OUT`) gets no declaration:
+  `cdef int x; x = a + b; return x` becomes `x = a + b; return x;` without `int x;`.
+  `visit_declaration` skips `OUT`/`INOUT` variables, which is right in model functions
+  (they live in the structs) but not in helpers. The generated C++ doesn't compile. Odin: not
+  affected. Tell: PyCrop2ML.
 
 ### Python target
 

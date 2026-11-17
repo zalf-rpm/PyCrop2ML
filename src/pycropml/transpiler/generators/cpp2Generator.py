@@ -64,6 +64,15 @@ class Cpp2Generator(CodeGenerator, CppRules):
 
         op = node.op
         r= False
+        if op in ("|", "&", "^", "<<", ">>"):
+            # C/C++ rank comparisons above & ^ | (Python below them), and clang warns about
+            # arithmetic inside shifts: parenthesise the expression and its compound operands
+            self.write("(")
+            self.bitwise_operand(node.left)
+            self.write(f" {self.binary_op[op]} ")
+            self.bitwise_operand(node.right)
+            self.write(")")
+            return
         if op == "is_not":
             self.write("!(")
             self.visit(node.left)
@@ -106,6 +115,18 @@ class Cpp2Generator(CodeGenerator, CppRules):
                 self.write(")")
             else: self.visit(node.right)
         self.operator_exit()
+
+    def bitwise_operand(self, node):
+        """Operand of a bitwise operator: compound expressions get their own parentheses."""
+        compound = node.type in ("binary_op", "comparison") and \
+            str(node.op) not in ("|", "&", "^", "<<", ">>")
+        if compound:
+            self.write("(")
+        self.precedence.append(0)  # the parentheses are written here, not by the operand
+        self.visit(node)
+        self.precedence.pop()
+        if compound:
+            self.write(")")
 
     def visit_constant(self, node):
         self.write(self.constant[node.library][node.name])

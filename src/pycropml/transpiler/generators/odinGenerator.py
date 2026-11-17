@@ -333,7 +333,10 @@ class OdinGenerator(CodeGenerator, OdinRules):
             left, right = self.condition(node.left, prec), self.condition(node.right, prec + 1)
             return f"{left} {self.binary_op[op]} {right}", prec
         left = self.paren(node.left, prec, want)
-        right = self.paren(node.right, prec + 1, want)
+        if op in ("<<", ">>") and not is_constant(node.right):
+            right = f"uint({self.expr(node.right)})"  # Odin requires an unsigned shift count
+        else:
+            right = self.paren(node.right, prec + 1, want)
         return f"{left} {self.binary_op[op]} {right}", prec
 
     expr_comparison = expr_binary_op

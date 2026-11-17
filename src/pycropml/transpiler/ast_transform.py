@@ -486,6 +486,10 @@ class AstTransformer:
     def visit_intbinopnode(self, node, operand1, operand2, location):
         return self.visit_binopnode(node, operand1, operand2, location)
 
+    # Cython creates its own class for `|` (also used for type unions); & ^ << >> are IntBinopNodes
+    def visit_bitwiseornode(self, node, operand1, operand2, location):
+        return self.visit_binopnode(node, operand1, operand2, location)
+
     def visit_namenode(self, node, location):
         id = node.name
         if self.retrieve_library(id):
@@ -709,6 +713,17 @@ class AstTransformer:
             "operator": "not",
             "value": self.visit_node(operand),
             "pseudo_type": self.visit_node(operand)["pseudo_type"],
+        }
+
+    def visit_tildenode(self, node, operand, location):
+        value = self.visit_node(operand)
+        if value["pseudo_type"] != "int":
+            raise type_check_error("~ expects an int, not %s" % value["pseudo_type"], location, self.lines)
+        return {
+            "type": "unary_op",
+            "operator": "~",
+            "value": value,
+            "pseudo_type": "int",
         }
 
     def visit_unaryplusnode(self, node, operand, location):
